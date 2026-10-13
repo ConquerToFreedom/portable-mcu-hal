@@ -20,6 +20,7 @@ GPTIMER_Regs fake_ti_timg0;
 GPTIMER_Regs fake_ti_timg1;
 GPTIMER_Regs fake_ti_tima0;
 GPTIMER_Regs fake_ti_tima1;
+FLASHCTL_Regs fake_ti_flashctl;
 
 bool fake_ti_uart_tx_fifo_full = false;
 bool fake_ti_uart_rx_fifo_empty = true;
@@ -38,6 +39,16 @@ uint16_t fake_ti_adc_next_value = 0;
 DL_ADC12_IIDX fake_ti_adc_pending_interrupt = DL_ADC12_IIDX_MEM0_RESULT_LOADED;
 
 DL_TIMER_IIDX fake_ti_timer_pending_interrupt = DL_TIMER_IIDX_NONE;
+
+int fake_ti_flash_clear_status_count = 0;
+int fake_ti_flash_unprotect_count = 0;
+uint32_t fake_ti_flash_last_erase_address = 0;
+int fake_ti_flash_erase_call_count = 0;
+bool fake_ti_flash_wait_done_result = true;
+uint32_t fake_ti_flash_last_program_address = 0;
+uint32_t fake_ti_flash_last_program_data_size = 0;
+int fake_ti_flash_program_call_count = 0;
+bool fake_ti_flash_program_result = true;
 
 static uint32_t s_cc_value[2][4]; /* [TIMA0/TIMA1][CC0..CC3] */
 
@@ -219,4 +230,55 @@ void fake_ti_reset(void)
     fake_ti_adc_pending_interrupt = DL_ADC12_IIDX_MEM0_RESULT_LOADED;
     fake_ti_timer_pending_interrupt = DL_TIMER_IIDX_NONE;
     memset(s_cc_value, 0, sizeof(s_cc_value));
+    fake_ti_flash_clear_status_count = 0;
+    fake_ti_flash_unprotect_count = 0;
+    fake_ti_flash_last_erase_address = 0;
+    fake_ti_flash_erase_call_count = 0;
+    fake_ti_flash_wait_done_result = true;
+    fake_ti_flash_last_program_address = 0;
+    fake_ti_flash_last_program_data_size = 0;
+    fake_ti_flash_program_call_count = 0;
+    fake_ti_flash_program_result = true;
+}
+
+/* ---- Flash (DL_FlashCTL_*) --------------------------------------------- */
+
+void DL_FlashCTL_executeClearStatus(FLASHCTL_Regs *flashctl)
+{
+    (void)flashctl;
+    fake_ti_flash_clear_status_count++;
+}
+
+void DL_FlashCTL_unprotectSector(FLASHCTL_Regs *flashctl, uint32_t addr, DL_FLASHCTL_REGION_SELECT regionSelect)
+{
+    (void)flashctl; (void)addr; (void)regionSelect;
+    fake_ti_flash_unprotect_count++;
+}
+
+void DL_FlashCTL_protectSector(FLASHCTL_Regs *flashctl, uint32_t addr, DL_FLASHCTL_REGION_SELECT regionSelect)
+{
+    (void)flashctl; (void)addr; (void)regionSelect;
+}
+
+void DL_FlashCTL_eraseMemory(FLASHCTL_Regs *flashctl, uint32_t address, DL_FLASHCTL_COMMAND_SIZE memorySize)
+{
+    (void)flashctl; (void)memorySize;
+    fake_ti_flash_last_erase_address = address;
+    fake_ti_flash_erase_call_count++;
+}
+
+bool DL_FlashCTL_waitForCmdDone(const FLASHCTL_Regs *flashctl)
+{
+    (void)flashctl;
+    return fake_ti_flash_wait_done_result;
+}
+
+bool DL_FlashCTL_programMemoryBlocking(FLASHCTL_Regs *flashctl, uint32_t address, uint32_t *data,
+                                       uint32_t dataSize, DL_FLASHCTL_REGION_SELECT regionSelect)
+{
+    (void)flashctl; (void)data; (void)regionSelect;
+    fake_ti_flash_last_program_address = address;
+    fake_ti_flash_last_program_data_size = dataSize;
+    fake_ti_flash_program_call_count++;
+    return fake_ti_flash_program_result;
 }

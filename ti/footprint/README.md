@@ -1,6 +1,6 @@
 # TI MSPM0 adapter footprint measurement
 
-Measures how much flash (`.text`) and RAM (`.data`+`.bss`) each of this vendor's 7 adapter files
+Measures how much flash (`.text`) and RAM (`.data`+`.bss`) each of this vendor's 8 adapter files
 costs on real Cortex-M0+ (MSPM0's actual core), using a real ARM cross-compiler
 (`arm-none-eabi-gcc`) — not the host `gcc` `../tests/` uses. See `FOOTPRINT.md` for the last
 recorded numbers and its "What these numbers do and don't mean" section before quoting one out of

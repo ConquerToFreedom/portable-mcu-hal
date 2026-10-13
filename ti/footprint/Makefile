@@ -19,7 +19,8 @@ SRCS := \
   spi:$(ROOT)/ti/spi/hal_port_ti_mspm0_spi.c \
   adc:$(ROOT)/ti/adc/hal_port_ti_mspm0_adc.c \
   timer:$(ROOT)/ti/timer/hal_port_ti_mspm0_timer.c \
-  pwm:$(ROOT)/ti/pwm/hal_port_ti_mspm0_pwm.c
+  pwm:$(ROOT)/ti/pwm/hal_port_ti_mspm0_pwm.c \
+  flash:$(ROOT)/ti/flash/hal_port_ti_mspm0_flash.c
 
 .PHONY: all clean report
 

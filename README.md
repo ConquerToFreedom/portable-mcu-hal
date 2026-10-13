@@ -8,8 +8,8 @@ STM32, nRF52, Silicon Labs EFR32, and TI MSPM0. Write your business logic
 once against a small, stable API; swap the underlying vendor SDK by
 changing one preprocessor macro.
 
-**Status:** early development — all seven peripherals (GPIO, UART, I2C,
-SPI, ADC, Timer, PWM) are frozen and have adapters written for all five
+**Status:** early development — all eight peripherals (GPIO, UART, I2C,
+SPI, ADC, Timer, PWM, Flash) are frozen and have adapters written for all five
 target macros, each with a passing unit test and a measured flash/RAM
 footprint (see "Testing and footprint" below). The `os_port.h` RTOS
 shim is still undesigned. Not ready for production use — no adapter
@@ -88,13 +88,13 @@ wire this in, since the two real risks below look similar but aren't:
 
 ## Supported targets (in progress)
 
-| Vendor | Target macro | GPIO | UART | I2C | SPI | ADC | Timer | PWM |
-|---|---|---|---|---|---|---|---|---|
-| STM32 | `TARGET_STM32` | Written, unverified | Written, unverified | Written, unverified | Written, unverified | Written, unverified | Written, unverified | Written, unverified |
-| nRF52 | `TARGET_NRF52` | Written, unverified | Written, unverified | Written, unverified | Written, unverified | Written, unverified | Written, unverified | Written, unverified (see below) |
-| Silicon Labs EFR32 (emlib) | `TARGET_SILABS` | Written, unverified | Written, unverified | Written, unverified | Written, unverified (see below) | Written, unverified (see below) | Written, unverified | Written, unverified (see below) |
-| Silicon Labs EFR32 (`sl_gpio`/`sl_i2c`) | `TARGET_SILABS_SLGPIO` | Written, unverified | Written, unverified (see below) | Written, unverified | Written, unverified (see below) | Written, unverified (see below) | Written, unverified (see below) | Written, unverified (see below) |
-| TI MSPM0 | `TARGET_TI_MSPM0` | Written, unverified (direction only — see below) | Written, unverified (see caveats below) | Written, unverified (see caveats below) | Written, unverified (see caveats below) | Written, unverified (see caveats below) | Written, unverified (see caveats below) | Written, unverified (see caveats below) |
+| Vendor | Target macro | GPIO | UART | I2C | SPI | ADC | Timer | PWM | Flash |
+|---|---|---|---|---|---|---|---|---|---|
+| STM32 | `TARGET_STM32` | Written, unverified | Written, unverified | Written, unverified | Written, unverified | Written, unverified | Written, unverified | Written, unverified | Written, unverified (see below) |
+| nRF52 | `TARGET_NRF52` | Written, unverified | Written, unverified | Written, unverified | Written, unverified | Written, unverified | Written, unverified | Written, unverified (see below) | Written, unverified |
+| Silicon Labs EFR32 (emlib) | `TARGET_SILABS` | Written, unverified | Written, unverified | Written, unverified | Written, unverified (see below) | Written, unverified (see below) | Written, unverified | Written, unverified (see below) | Written, unverified (see below) |
+| Silicon Labs EFR32 (`sl_gpio`/`sl_i2c`) | `TARGET_SILABS_SLGPIO` | Written, unverified | Written, unverified (see below) | Written, unverified | Written, unverified (see below) | Written, unverified (see below) | Written, unverified (see below) | Written, unverified (see below) | Written, unverified (see below) |
+| TI MSPM0 | `TARGET_TI_MSPM0` | Written, unverified (direction only — see below) | Written, unverified (see caveats below) | Written, unverified (see caveats below) | Written, unverified (see caveats below) | Written, unverified (see caveats below) | Written, unverified (see caveats below) | Written, unverified (see caveats below) | Written, unverified (see caveats below) |
 
 "Written, unverified" means: written against the vendor's documented
 API and, where a specific detail was in question, checked against the
@@ -297,6 +297,41 @@ reasoning behind each of these.
 See `docs/architecture.md`'s "PWM, part two" section for the full
 reasoning behind each of these.
 
+**Flash caveats:** unlike every peripheral above, there is no `hf_flash_t`
+instance type — internal flash is one singular region per chip, so the API
+is addressed directly by raw chip memory address. **Never erase or write
+the flash region your own code/vector-table/const-data lives in** — every
+adapter here uses each vendor's normal, flash-resident blocking erase/
+program call, not a RAM-executed variant; see `hf_flash_t`'s header comment
+in `include/hal_wrapper.h` for the full cross-vendor safety finding behind
+this rule.
+- **STM32**: F4-family reference. Erase granularity is **not uniform** —
+  F4's sector table has 16 KB/64 KB/128 KB sectors in the same bank, so
+  `hf_flash_erase_size()` looks the address up in a table rather than
+  returning one constant; EDIT that table for your exact part.
+- **nRF52**: uniform 4096-byte pages via `nrfx_nvmc`. Does not account for
+  SoftDevice (BLE stack) coexistence — direct NVMC access while a
+  SoftDevice is active can stall the radio; use `nrf_fstorage` instead if
+  you add BLE to a project using this adapter.
+- **Silicon Labs, both targets**: both `TARGET_SILABS` and
+  `TARGET_SILABS_SLGPIO` use the same classic `em_msc.h` (MSC) calls —
+  there is no distinct current-SDK driver at this level (Silicon Labs'
+  current-generation flash story, NVM3, is a wear-leveled store built on
+  top of the same MSC peripheral, and `hf_flash_t` is explicitly scoped to
+  raw flash, not a filesystem). Page size varies by part's total flash
+  size — EDIT the constant in both adapter files for your part.
+- **TI MSPM0**: 1024-byte sectors (confirmed against `dl_flashctl.h`'s
+  `DL_FLASHCTL_SECTOR_SIZE`), 64-bit flash words. The exact
+  `unprotectSector`/erase ordering and the `FLASHCTL` base-pointer macro
+  name are flagged as not independently confirmed — see the adapter's own
+  header comment.
+- **All five adapters**: no async tier (flash operations are rare,
+  slow, one-at-a-time) and no RAM-executed erase/program variant — both
+  backlog.
+
+See `docs/architecture.md`'s "Flash" section for the full reasoning
+behind each of these.
+
 ## SDK versions this wrapper targets
 
 Vendor SDKs aren't static, and two of the four vendors below (nRF52
@@ -307,10 +342,10 @@ SDK generation(s) it covers and why.
 
 | Vendor | Adapter files | SDK generation covered |
 |---|---|---|
-| STM32 | `stm/gpio/hal_port_stm32.c`, `stm/uart/hal_port_stm32_uart.c`, `stm/i2c/hal_port_stm32_i2c.c`, `stm/spi/hal_port_stm32_spi.c`, `stm/adc/hal_port_stm32_adc.c`, `stm/timer/hal_port_stm32_timer.c`, `stm/pwm/hal_port_stm32_pwm.c` | **STM32 HAL**, any current STM32Cube firmware package. One adapter per peripheral, no split needed — ST's older Standard Peripheral Library was end-of-life'd years ago and isn't a live migration path. Timer uses the basic timers (TIM6/TIM7) via `HAL_TIM_Base_*`, with software-enforced one-shot since basic timers have no hardware one-shot mode. PWM uses general-purpose timers (TIM2/TIM3) instead, since basic timers have no output-compare channels at all. |
-| nRF52 | `nrf/gpio/hal_port_nrf52.c`, `nrf/uart/hal_port_nrf52_uart.c`, `nrf/i2c/hal_port_nrf52_i2c.c`, `nrf/spi/hal_port_nrf52_spi.c`, `nrf/adc/hal_port_nrf52_adc.c`, `nrf/timer/hal_port_nrf52_timer.c`, `nrf/pwm/hal_port_nrf52_pwm.c` | **Both** the legacy **nRF5 SDK** and the current **nRF Connect SDK**. One adapter per peripheral, not two — all seven call `nrfx` directly (`nrf_gpio.h`, `nrfx_uarte.h`, `nrfx_twim.h`, `nrfx_spim.h`, `nrfx_saadc.h`, `nrfx_timer.h`, `nrfx_pwm.h`), and those exact headers are bundled unchanged inside both SDK generations (nRF Connect SDK's `hal_nordic` is downstream of the same `nrfx` source). Deliberately does *not* go through nRF Connect SDK's own Zephyr-based driver APIs, since that would mean adopting Zephyr's kernel/devicetree/build system — exactly what this project exists to avoid (see "Why not just use X" in `docs/architecture.md`). Timer uses TIMER1/TIMER2 (TIMER0 conventionally reserved for the SoftDevice/radio), with genuine hardware one-shot/periodic via shortcut masks. PWM uses the entirely separate nrfx_pwm peripheral (PWM0/PWM1) — an EasyDMA sequence player, not a compare-register write, the most structurally different adapter of the seven. |
-| Silicon Labs EFR32 | `silicon_labs/{gpio,uart,i2c,spi,adc,timer,pwm}/hal_port_silabs*.c` **and** `silicon_labs/{gpio,uart,i2c,spi,adc,timer,pwm}/hal_port_silabs_slgpio*.c` | **Two real adapters per peripheral for GPIO, I2C, ADC, Timer, and PWM**, though for several different kinds of reasons. GPIO/I2C/ADC split because Silicon Labs' two SDK generations are genuinely different, incompatible APIs (or, for ADC, genuinely different hardware) there — not just a rename. Timer splits because of a different API *shape* — classic emlib's `TIMER` is a "pick the vendor's Nth hardware peripheral" driver, while the current SDK's `sl_sleeptimer` is a software timer *service* backed by one shared hardware timer underneath, exposing unlimited independent handles instead of instance numbers. PWM splits for a third reason again: the current SDK's `sl_pwm` is a real driver, but confirmed to be a thin convenience wrapper directly over the same classic TIMER hardware the `TARGET_SILABS` PWM adapter uses — not a genuinely different peripheral, just a genuinely different (and more convenient, better-behaved) API surface over it. UART and SPI remain the exceptions: both target macros' UART adapters use the same classic emlib calls, and both target macros' SPI adapters use the same `platform/emdrv/spidrv` (SPIDRV) driver unchanged, since neither has an independent "current" driver on this vendor (see the UART/SPI caveats above). The `TARGET_SILABS` files target classic **emlib** (ADC, Timer, and PWM included — PWM using TIMER2/TIMER3, disjoint from Timer's TIMER0/TIMER1 since both peripherals genuinely share the same hardware family on this target), still supported today but with no Series 3 coverage. The `TARGET_SILABS_SLGPIO` files target the current **`sl_gpio`/`sl_i2c` drivers** for GPIO/I2C plus **IADC** for ADC plus **`sl_sleeptimer`** for Timer plus **`sl_pwm`** for PWM ("Peripheral HAL"-era architecture, Series 2 *and*, for GPIO/I2C, Series 3) plus the same emlib UART and SPIDRV SPI. All pairs implement the identical `hf_gpio_*`/`hf_uart_*`/`hf_i2c_*`/`hf_spi_*`/`hf_adc_*`/`hf_timer_*`/`hf_pwm_*` contract, so migrating means changing your IDE's target macro and SDK — never your own business logic. Note `sl_sleeptimer`'s Timer adapter and `sl_pwm`'s PWM adapter each have their own genuine, permanent resolution loss on this SDK generation: millisecond-only time conversion for Timer, whole-percent-only duty cycle for PWM (see the Timer and PWM caveats above). |
-| TI MSPM0 | `ti/gpio/hal_port_ti_mspm0.c`, `ti/uart/hal_port_ti_mspm0_uart.c`, `ti/i2c/hal_port_ti_mspm0_i2c.c`, `ti/spi/hal_port_ti_mspm0_spi.c`, `ti/adc/hal_port_ti_mspm0_adc.c`, `ti/timer/hal_port_ti_mspm0_timer.c`, `ti/pwm/hal_port_ti_mspm0_pwm.c` | driverlib, any current MSPM0-SDK package. One adapter per peripheral, no split known — but see the caveats above: GPIO init is direction-only, and several UART/I2C/SPI/ADC/Timer/PWM constant names are unverified, all regardless of SDK version. Timer deliberately uses `DL_TimerG` (general-purpose) rather than `DL_TimerA`, reserving TimerA's PWM-capable hardware for PWM — the reservation this row's own Timer entry made, put to use. |
+| STM32 | `stm/gpio/hal_port_stm32.c`, `stm/uart/hal_port_stm32_uart.c`, `stm/i2c/hal_port_stm32_i2c.c`, `stm/spi/hal_port_stm32_spi.c`, `stm/adc/hal_port_stm32_adc.c`, `stm/timer/hal_port_stm32_timer.c`, `stm/pwm/hal_port_stm32_pwm.c`, `stm/flash/hal_port_stm32_flash.c` | **STM32 HAL**, any current STM32Cube firmware package. One adapter per peripheral, no split needed — ST's older Standard Peripheral Library was end-of-life'd years ago and isn't a live migration path. Timer uses the basic timers (TIM6/TIM7) via `HAL_TIM_Base_*`, with software-enforced one-shot since basic timers have no hardware one-shot mode. PWM uses general-purpose timers (TIM2/TIM3) instead, since basic timers have no output-compare channels at all. Flash targets the F4 family's non-uniform sector table (see the Flash caveats above). |
+| nRF52 | `nrf/gpio/hal_port_nrf52.c`, `nrf/uart/hal_port_nrf52_uart.c`, `nrf/i2c/hal_port_nrf52_i2c.c`, `nrf/spi/hal_port_nrf52_spi.c`, `nrf/adc/hal_port_nrf52_adc.c`, `nrf/timer/hal_port_nrf52_timer.c`, `nrf/pwm/hal_port_nrf52_pwm.c`, `nrf/flash/hal_port_nrf52_flash.c` | **Both** the legacy **nRF5 SDK** and the current **nRF Connect SDK**. One adapter per peripheral, not two — all eight call `nrfx` directly (`nrf_gpio.h`, `nrfx_uarte.h`, `nrfx_twim.h`, `nrfx_spim.h`, `nrfx_saadc.h`, `nrfx_timer.h`, `nrfx_pwm.h`, `nrfx_nvmc.h`), and those exact headers are bundled unchanged inside both SDK generations (nRF Connect SDK's `hal_nordic` is downstream of the same `nrfx` source). Deliberately does *not* go through nRF Connect SDK's own Zephyr-based driver APIs, since that would mean adopting Zephyr's kernel/devicetree/build system — exactly what this project exists to avoid (see "Why not just use X" in `docs/architecture.md`). Timer uses TIMER1/TIMER2 (TIMER0 conventionally reserved for the SoftDevice/radio), with genuine hardware one-shot/periodic via shortcut masks. PWM uses the entirely separate nrfx_pwm peripheral (PWM0/PWM1) — an EasyDMA sequence player, not a compare-register write, the most structurally different adapter of the eight. Flash uses `nrfx_nvmc` directly, uniform 4096-byte pages, with no SoftDevice coexistence handling (see the Flash caveats above). |
+| Silicon Labs EFR32 | `silicon_labs/{gpio,uart,i2c,spi,adc,timer,pwm,flash}/hal_port_silabs*.c` **and** `silicon_labs/{gpio,uart,i2c,spi,adc,timer,pwm,flash}/hal_port_silabs_slgpio*.c` | **Two real adapters per peripheral for GPIO, I2C, ADC, Timer, and PWM**, though for several different kinds of reasons. GPIO/I2C/ADC split because Silicon Labs' two SDK generations are genuinely different, incompatible APIs (or, for ADC, genuinely different hardware) there — not just a rename. Timer splits because of a different API *shape* — classic emlib's `TIMER` is a "pick the vendor's Nth hardware peripheral" driver, while the current SDK's `sl_sleeptimer` is a software timer *service* backed by one shared hardware timer underneath, exposing unlimited independent handles instead of instance numbers. PWM splits for a third reason again: the current SDK's `sl_pwm` is a real driver, but confirmed to be a thin convenience wrapper directly over the same classic TIMER hardware the `TARGET_SILABS` PWM adapter uses — not a genuinely different peripheral, just a genuinely different (and more convenient, better-behaved) API surface over it. UART and SPI remain the exceptions: both target macros' UART adapters use the same classic emlib calls, and both target macros' SPI adapters use the same `platform/emdrv/spidrv` (SPIDRV) driver unchanged, since neither has an independent "current" driver on this vendor (see the UART/SPI caveats above). The `TARGET_SILABS` files target classic **emlib** (ADC, Timer, and PWM included — PWM using TIMER2/TIMER3, disjoint from Timer's TIMER0/TIMER1 since both peripherals genuinely share the same hardware family on this target), still supported today but with no Series 3 coverage. The `TARGET_SILABS_SLGPIO` files target the current **`sl_gpio`/`sl_i2c` drivers** for GPIO/I2C plus **IADC** for ADC plus **`sl_sleeptimer`** for Timer plus **`sl_pwm`** for PWM ("Peripheral HAL"-era architecture, Series 2 *and*, for GPIO/I2C, Series 3) plus the same emlib UART and SPIDRV SPI. Flash is the one peripheral that does NOT split: both target macros' Flash adapters use the same classic `em_msc.h` (MSC) calls unchanged, since there is no distinct current-SDK driver at this level (see the Flash caveats above). All pairs implement the identical `hf_gpio_*`/`hf_uart_*`/`hf_i2c_*`/`hf_spi_*`/`hf_adc_*`/`hf_timer_*`/`hf_pwm_*`/`hf_flash_*` contract, so migrating means changing your IDE's target macro and SDK — never your own business logic. Note `sl_sleeptimer`'s Timer adapter and `sl_pwm`'s PWM adapter each have their own genuine, permanent resolution loss on this SDK generation: millisecond-only time conversion for Timer, whole-percent-only duty cycle for PWM (see the Timer and PWM caveats above). |
+| TI MSPM0 | `ti/gpio/hal_port_ti_mspm0.c`, `ti/uart/hal_port_ti_mspm0_uart.c`, `ti/i2c/hal_port_ti_mspm0_i2c.c`, `ti/spi/hal_port_ti_mspm0_spi.c`, `ti/adc/hal_port_ti_mspm0_adc.c`, `ti/timer/hal_port_ti_mspm0_timer.c`, `ti/pwm/hal_port_ti_mspm0_pwm.c`, `ti/flash/hal_port_ti_mspm0_flash.c` | driverlib, any current MSPM0-SDK package. One adapter per peripheral, no split known — but see the caveats above: GPIO init is direction-only, and several UART/I2C/SPI/ADC/Timer/PWM/Flash constant names are unverified, all regardless of SDK version. Timer deliberately uses `DL_TimerG` (general-purpose) rather than `DL_TimerA`, reserving TimerA's PWM-capable hardware for PWM — the reservation this row's own Timer entry made, put to use. Flash's 1024-byte `DL_FLASHCTL_SECTOR_SIZE` is confirmed directly against `dl_flashctl.h`. |
 
 None of these are pinned to one exact numbered SDK release (e.g. a
 specific STM32Cube_FW_F4 version, or nRF5 SDK 17.1.0 vs. an older

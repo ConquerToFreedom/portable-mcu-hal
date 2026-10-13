@@ -13,6 +13,7 @@
 #include "em_i2c.h"
 #include "em_adc.h"
 #include "em_timer.h"
+#include "em_msc.h"
 #include "spidrv.h"
 #include <stdbool.h>
 
@@ -74,6 +75,20 @@ uint32_t fake_silabs_pwm_get_route(TIMER_TypeDef *timer, unsigned int ch);
 /* Whether GPIO->TIMERROUTE_SET[n].ROUTEEN's bit for the given CC
  * channel was ever set (hf_pwm_start() sets it). */
 bool fake_silabs_pwm_route_enabled(TIMER_TypeDef *timer, unsigned int ch);
+
+/* ---- Flash (em_msc, shared with TARGET_SILABS_SLGPIO) ---------------------- */
+/* How many times MSC_Init() was called — the classic/current-SDK
+ * flash adapters' hf_flash_init() must call this before any
+ * erase/write, same real-requirement check this project's GPIO
+ * clock-enable bug-fix precedent established for other peripherals. */
+extern int fake_silabs_msc_init_count;
+extern uint32_t fake_silabs_last_erase_address;
+extern int fake_silabs_erase_call_count;
+extern uint32_t fake_silabs_last_write_address;
+extern uint32_t fake_silabs_last_write_num_bytes;
+extern int fake_silabs_write_call_count;
+/* MSC_ErasePage/WriteWord's next return value (default mscReturnOk). */
+extern msc_Return_TypeDef fake_silabs_msc_next_status;
 
 #ifdef __cplusplus
 }

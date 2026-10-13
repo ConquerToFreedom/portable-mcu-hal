@@ -1,6 +1,6 @@
 # Silicon Labs adapter unit tests
 
-Each of this vendor's 14 adapter files (7 peripherals × 2 SDK generations) has a matching test
+Each of this vendor's 16 adapter files (8 peripherals × 2 SDK generations) has a matching test
 file here, built and run on the host — no vendor SDK or real hardware needed. Run everything
 with:
 

@@ -25,6 +25,11 @@ nrfx_err_t fake_nrf52_next_status = NRFX_SUCCESS;
 nrf_saadc_value_t fake_nrf52_saadc_next_blocking_value = 0;
 bool fake_nrf52_auto_complete = true;
 bool fake_nrf52_twim_auto_success = true;
+uint32_t fake_nrf52_last_erase_address;
+int fake_nrf52_erase_call_count;
+uint32_t fake_nrf52_last_write_address;
+uint32_t fake_nrf52_last_write_num_words;
+int fake_nrf52_write_call_count;
 
 static bool s_gpio_state[64];
 
@@ -421,4 +426,31 @@ void fake_nrf52_reset(void)
     memset(s_pwm_last_seq, 0, sizeof(s_pwm_last_seq));
     memset(s_pwm_playing, 0, sizeof(s_pwm_playing));
     s_pwm_next_slot = 0;
+    fake_nrf52_last_erase_address = 0;
+    fake_nrf52_erase_call_count = 0;
+    fake_nrf52_last_write_address = 0;
+    fake_nrf52_last_write_num_words = 0;
+    fake_nrf52_write_call_count = 0;
+}
+
+/* ---- Flash (nrfx_nvmc) --------------------------------------------------- */
+
+nrfx_err_t nrfx_nvmc_page_erase(uint32_t address)
+{
+    fake_nrf52_last_erase_address = address;
+    fake_nrf52_erase_call_count++;
+    return fake_nrf52_next_status;
+}
+
+void nrfx_nvmc_words_write(uint32_t address, void const *src, uint32_t num_words)
+{
+    (void)src;
+    fake_nrf52_last_write_address = address;
+    fake_nrf52_last_write_num_words = num_words;
+    fake_nrf52_write_call_count++;
+}
+
+bool nrfx_nvmc_write_done_check(void)
+{
+    return true;
 }

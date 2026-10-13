@@ -57,6 +57,19 @@ extern SPI_HandleTypeDef hspi1, hspi2, hspi3;
 extern ADC_HandleTypeDef hadc1, hadc2, hadc3;
 extern TIM_HandleTypeDef htim2, htim3, htim6, htim7;
 
+/* Flash — HAL_FLASHEx_Erase/HAL_FLASH_Program are never real memory
+ * operations here (same as every other fake HAL_* call in this file);
+ * these just record what the adapter last asked for, and how many
+ * times, for assertions. */
+extern uint32_t fake_stm32_last_erase_sector;
+extern uint32_t fake_stm32_last_erase_nb_sectors;
+extern int fake_stm32_erase_call_count;
+extern uint32_t fake_stm32_last_program_address;
+extern uint64_t fake_stm32_last_program_data;
+extern int fake_stm32_program_call_count;
+extern int fake_stm32_flash_lock_count;
+extern int fake_stm32_flash_unlock_count;
+
 #ifdef __cplusplus
 }
 #endif

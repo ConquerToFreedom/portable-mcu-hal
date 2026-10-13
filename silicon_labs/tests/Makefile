@@ -29,6 +29,7 @@ SPI         := $(ROOT)/silicon_labs/spi/hal_port_silabs_spi.c
 ADC         := $(ROOT)/silicon_labs/adc/hal_port_silabs_adc.c
 TIMER       := $(ROOT)/silicon_labs/timer/hal_port_silabs_timer.c
 PWM         := $(ROOT)/silicon_labs/pwm/hal_port_silabs_pwm.c
+FLASH       := $(ROOT)/silicon_labs/flash/hal_port_silabs_flash.c
 
 SLGPIO_GPIO  := $(ROOT)/silicon_labs/gpio/hal_port_silabs_slgpio.c
 SLGPIO_UART  := $(ROOT)/silicon_labs/uart/hal_port_silabs_slgpio_uart.c
@@ -37,10 +38,11 @@ SLGPIO_SPI   := $(ROOT)/silicon_labs/spi/hal_port_silabs_slgpio_spi.c
 SLGPIO_ADC   := $(ROOT)/silicon_labs/adc/hal_port_silabs_slgpio_adc.c
 SLGPIO_TIMER := $(ROOT)/silicon_labs/timer/hal_port_silabs_slgpio_timer.c
 SLGPIO_PWM   := $(ROOT)/silicon_labs/pwm/hal_port_silabs_slgpio_pwm.c
+SLGPIO_FLASH := $(ROOT)/silicon_labs/flash/hal_port_silabs_slgpio_flash.c
 
-TESTS := silabs_gpio silabs_uart silabs_i2c silabs_spi silabs_adc silabs_timer silabs_pwm \
+TESTS := silabs_gpio silabs_uart silabs_i2c silabs_spi silabs_adc silabs_timer silabs_pwm silabs_flash \
          silabs_slgpio_gpio silabs_slgpio_uart silabs_slgpio_i2c silabs_slgpio_spi silabs_slgpio_adc \
-         silabs_slgpio_timer silabs_slgpio_pwm
+         silabs_slgpio_timer silabs_slgpio_pwm silabs_slgpio_flash
 
 .PHONY: all clean report $(TESTS)
 
@@ -64,6 +66,8 @@ silabs_timer: $(BUILD)
 	$(CC) $(CFLAGS) -DTARGET_SILABS $(INC) $(CLASSIC_INC) test_silabs_timer.c $(CLASSIC_FAKE) $(TIMER) $(UNITY) -o $(BUILD)/test_$@
 silabs_pwm: $(BUILD)
 	$(CC) $(CFLAGS) -DTARGET_SILABS $(INC) $(CLASSIC_INC) test_silabs_pwm.c $(CLASSIC_FAKE) $(PWM) $(UNITY) -o $(BUILD)/test_$@
+silabs_flash: $(BUILD)
+	$(CC) $(CFLAGS) -DTARGET_SILABS $(INC) $(CLASSIC_INC) test_silabs_flash.c $(CLASSIC_FAKE) $(FLASH) $(UNITY) -o $(BUILD)/test_$@
 
 # --- current (TARGET_SILABS_SLGPIO) ---
 silabs_slgpio_gpio: $(BUILD)
@@ -80,6 +84,8 @@ silabs_slgpio_timer: $(BUILD)
 	$(CC) $(CFLAGS) -DTARGET_SILABS_SLGPIO $(INC) $(SLGPIO_INC) test_silabs_slgpio_timer.c $(SLGPIO_FAKE) $(CLASSIC_FAKE) $(SLGPIO_TIMER) $(UNITY) -o $(BUILD)/test_$@
 silabs_slgpio_pwm: $(BUILD)
 	$(CC) $(CFLAGS) -DTARGET_SILABS_SLGPIO $(INC) $(SLGPIO_INC) test_silabs_slgpio_pwm.c $(SLGPIO_FAKE) $(CLASSIC_FAKE) $(SLGPIO_PWM) $(UNITY) -o $(BUILD)/test_$@
+silabs_slgpio_flash: $(BUILD)
+	$(CC) $(CFLAGS) -DTARGET_SILABS_SLGPIO $(INC) $(CLASSIC_INC) test_silabs_slgpio_flash.c $(CLASSIC_FAKE) $(SLGPIO_FLASH) $(UNITY) -o $(BUILD)/test_$@
 
 clean:
 	rm -rf $(BUILD)

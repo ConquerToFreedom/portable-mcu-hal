@@ -628,6 +628,146 @@ bool hf_pwm_set_duty(hf_pwm_t channel, uint32_t duty_millipercent);
  *   TI's DL_TimerA dead-band generator), out of scope for this
  *   project's "thin wrapper" ambitions. */
 
+/* ------------------------------------------------------------------ */
+/* Flash — internal (on-chip) NVM read/erase/write, frozen (Stage 5)   */
+/* ------------------------------------------------------------------ */
+
+/* Unlike every peripheral above, there is no hf_flash_t opaque
+ * instance identifier and no HF_FLASH(...) encoding macro: internal
+ * flash is a single, singular region per chip on every one of these
+ * four vendors, not an "Nth peripheral" to select the way
+ * GPIO/UART/I2C/SPI/ADC/Timer/PWM all are. The API below is addressed
+ * directly by raw chip memory address instead of a scalar+lookup-table
+ * handle — there is nothing for a lookup table to decode.
+ *
+ * THE ONE RULE THAT MATTERS, surfaced loudly rather than hidden the
+ * way PWM's shared-frequency caveat is: every function below uses
+ * each vendor's normal, flash-resident blocking erase/program call —
+ * NOT a RAM-executed variant. On every vendor researched here,
+ * erasing or programming the flash bank your CPU is currently
+ * executing code from (or reading as const data) is unsafe with that
+ * normal call: TI's driverlib ships separate "FromRAM"/RAM-executed
+ * erase and program functions specifically because the blocking,
+ * flash-resident ones can hang or fault the part when they target
+ * their own bank; ST's own FLASH_EraseProgram example warns that
+ * erasing/writing the code you are currently running can crash the
+ * device; Silicon Labs' MSC write functions are themselves placed in
+ * RAM by the SDK's build system on affected parts for this exact
+ * reason (SL_RAMFUNC), which this project's classic adapter relies on
+ * rather than re-implements. This project does NOT implement the
+ * RAM-executed variants in v1 — backlog, see docs/development-plan.md.
+ * Confine hf_flash_erase()/hf_flash_write() to a region your own
+ * linker script has reserved for data storage and never placed code,
+ * vector tables, or currently-read const data in. This is a hardware
+ * constraint being surfaced honestly, not something this API adds
+ * software to hide or enforce, the same treatment already given to
+ * PWM's shared-timer-frequency caveat and Silicon Labs' UART/SPI
+ * USART-sharing conflict.
+ *
+ * hf_flash_init() performs one-time setup. On most vendors this is a
+ * no-op that only returns true — the exception is Silicon Labs
+ * classic, where emlib's own MSC_Init() must run before any MSC
+ * erase/write call, the same "a real per-vendor requirement, not
+ * invented busywork" reasoning as hf_i2c_init()/hf_spi_init() already
+ * have. Harmless, and required, to call even where it's a no-op —
+ * every other peripheral in this header has an init() call too, and
+ * this keeps hf_flash_t consistent with that rather than being the
+ * one exception. */
+bool hf_flash_init(void);
+
+/* Returns the erase granularity, in bytes, of whichever erase unit
+ * (page/sector) contains `address`. Deliberately takes an address
+ * parameter rather than being a zero-argument constant getter: STM32's
+ * sector-based families (F2/F4/F7/H7) have NON-UNIFORM sector sizes —
+ * the F4 family this project's other STM32 adapters use as their
+ * reference point has 16 KB sectors 0-3, a 64 KB sector 4, then 128 KB
+ * sectors 5 and up, all in the same flash bank. A zero-argument
+ * constant would silently lie on exactly the vendor this project
+ * already treats as its most-varied one (see hf_adc_t's ADC_REGULAR_RANK_1
+ * comment, hf_timer_t's TIM6/TIM7 availability comment). nRF52
+ * (4096 bytes, uniform), Silicon Labs classic (varies by part's total
+ * flash size — EDIT the constant in that adapter for your part, same
+ * "trim the table to match your part" precedent as this vendor's
+ * TIMER-count caveat), and TI MSPM0 (uniform per part, exact value
+ * NOT independently confirmed against an installed SDK — flagged, not
+ * guessed, in that adapter's own header) all ignore which address is
+ * passed and return one constant regardless. */
+uint32_t hf_flash_erase_size(uint32_t address);
+
+/* Returns the minimum alignment, in bytes, required for BOTH the
+ * address and the data length passed to hf_flash_write(): 4 on
+ * STM32 (F4 family reference: FLASH_TYPEPROGRAM_WORD — other families'
+ * L4/G4/G0's FLASH_TYPEPROGRAM_DOUBLEWORD or H7's 256-bit flash word
+ * need a different constant, same per-family substitution already
+ * flagged throughout this vendor's adapters), nRF52 (nrfx_nvmc_words_write
+ * requires a word-aligned address and writes whole 32-bit words), and
+ * Silicon Labs classic (MSC_WriteWord requires a word-aligned address
+ * and a byte count divisible by 4); 8 on TI MSPM0, whose flash word is
+ * 64 bits wide. Takes no address parameter, unlike hf_flash_erase_size
+ * — this is a property of the vendor's write-data-path width, not of
+ * which erase unit an address falls in. */
+uint32_t hf_flash_write_align(void);
+
+/* Erases the whole erase unit(s) covering [address, address+length).
+ * Both `address` and `length` must be exact multiples of
+ * hf_flash_erase_size(address) — returns false otherwise, rather than
+ * silently rounding up and erasing more than asked. This is the same
+ * "no hidden side effects" rule hf_flash_write() below follows for
+ * auto-erase: a caller that wants more than one erase unit erased
+ * calls this once with a `length` spanning all of them (the adapter
+ * loops internally if the vendor's own erase call only takes one unit
+ * at a time, e.g. STM32's HAL_FLASHEx_Erase or Silicon Labs'
+ * MSC_ErasePage), not once per unit. Erased flash reads as all-1-bits
+ * (0xFF per byte) on every vendor here — this is why hf_flash_write()
+ * can only clear bits, never set them, without erasing first. */
+bool hf_flash_erase(uint32_t address, uint32_t length);
+
+/* Programs `length` bytes from `data` starting at `address`. Both
+ * must be exact multiples of hf_flash_write_align() — returns false
+ * otherwise. Deliberately does NOT erase first: flash can only clear
+ * bits (1->0), never set them, so writing into not-already-erased
+ * flash silently produces the bitwise AND of the old and new data, not
+ * the new data — a caller must call hf_flash_erase() itself first.
+ * This mirrors hf_pwm_init()'s shared-frequency caveat and
+ * hf_i2c_write_read()'s "no default register-address width" choice:
+ * surfacing a real hardware constraint rather than adding software to
+ * silently auto-erase (and in doing so destroy whatever else shares
+ * that erase unit beyond this call's own `length`, if the caller only
+ * meant to update part of it). */
+bool hf_flash_write(uint32_t address, uint8_t *data, uint32_t length);
+
+/* Plain read of already-programmed (or erased, reading as 0xFF) flash
+ * into `data`. No alignment requirement on `address` or `length` —
+ * every vendor here maps internal flash directly into the CPU's
+ * readable address space, so this is a byte-granular memory copy, not
+ * a peripheral transaction the way hf_flash_erase/write are. Provided
+ * for API completeness/symmetry rather than necessity: a caller could
+ * equally do `memcpy(data, (const void *)address, length)` directly on
+ * every one of these four vendors, since none of them require going
+ * through a special read path the way some external SPI/QSPI flash
+ * parts would. */
+bool hf_flash_read(uint32_t address, uint8_t *data, uint32_t length);
+
+/* Deliberately NOT in v1, all backlog (see docs/development-plan.md):
+ * - RAM-executed erase/program variants (see the header comment
+ *   above) — needed only by a caller that genuinely must modify the
+ *   flash bank it is currently executing from, a materially more
+ *   involved feature (linker-script RAM placement, not just a
+ *   different driverlib call) than this project's other backlog
+ *   deferrals.
+ * - An async/callback-driven tier, unlike every other peripheral in
+ *   this header — flash erase/program operations are rare, slow
+ *   (milliseconds, not microseconds), one-at-a-time operations in
+ *   every real use case this project targets (writing config/
+ *   calibration data, not a high-throughput data log), so the
+ *   complexity of a non-blocking tier was judged not worth it for v1,
+ *   unlike UART/I2C/SPI/ADC's genuinely latency-sensitive transfers.
+ * - Wear-leveling, a filesystem, or a key-value store on top of raw
+ *   flash (the problem Silicon Labs' own NVM3 and similar vendor
+ *   libraries solve) — deliberately out of scope for a "thin wrapper"
+ *   over the raw peripheral, the same scope boundary already drawn
+ *   around every other peripheral here. */
+
 #ifdef __cplusplus
 }
 #endif

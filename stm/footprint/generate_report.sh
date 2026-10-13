@@ -32,7 +32,7 @@ NM=arm-none-eabi-nm
   done
 
   echo
-  echo "Sum of all 7 adapters' \`.text\`: **${total_text} bytes** - a real project only"
+  echo "Sum of all 8 adapters' \`.text\`: **${total_text} bytes** - a real project only"
   echo "ever includes the peripherals it actually uses, so treat this as a ceiling, not"
   echo "a typical build. Useful as a regression baseline: re-run after changing an"
   echo "adapter and diff against a committed copy of this file."

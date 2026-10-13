@@ -26,7 +26,8 @@ SRCS := \
   spi:$(ROOT)/stm/spi/hal_port_stm32_spi.c \
   adc:$(ROOT)/stm/adc/hal_port_stm32_adc.c \
   timer:$(ROOT)/stm/timer/hal_port_stm32_timer.c \
-  pwm:$(ROOT)/stm/pwm/hal_port_stm32_pwm.c
+  pwm:$(ROOT)/stm/pwm/hal_port_stm32_pwm.c \
+  flash:$(ROOT)/stm/flash/hal_port_stm32_flash.c
 
 .PHONY: all clean report
 

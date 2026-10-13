@@ -25,7 +25,7 @@ NM=arm-none-eabi-nm
   echo "|---|---|---|---:|---:|---:|"
 
   total_text=0
-  for f in build/gpio.o build/uart.o build/i2c.o build/spi.o build/adc.o; do
+  for f in build/gpio.o build/uart.o build/i2c.o build/spi.o build/adc.o build/timer.o build/pwm.o build/flash.o; do
     [ -e "$f" ] || continue
     name=$(basename "$f" .o)
     periph=$(echo "$name" | tr '[:lower:]' '[:upper:]')
@@ -33,7 +33,7 @@ NM=arm-none-eabi-nm
     total_text=$((total_text + text))
     echo "| classic (emlib) | Cortex-M4 | $periph | $text | $data | $bss |"
   done
-  for f in build/slgpio_gpio.o build/slgpio_uart.o build/slgpio_i2c.o build/slgpio_spi.o build/slgpio_adc.o; do
+  for f in build/slgpio_gpio.o build/slgpio_uart.o build/slgpio_i2c.o build/slgpio_spi.o build/slgpio_adc.o build/slgpio_timer.o build/slgpio_pwm.o build/slgpio_flash.o; do
     [ -e "$f" ] || continue
     name=$(basename "$f" .o | sed 's/^slgpio_//')
     periph=$(echo "$name" | tr '[:lower:]' '[:upper:]')
@@ -43,7 +43,7 @@ NM=arm-none-eabi-nm
   done
 
   echo
-  echo "Sum of all 14 adapters' \`.text\`: **${total_text} bytes** - no real project"
+  echo "Sum of all 16 adapters' \`.text\`: **${total_text} bytes** - no real project"
   echo "enables both generations at once (you pick one target macro), so treat this as"
   echo "a ceiling, not a typical build. Useful as a regression baseline: re-run after"
   echo "changing an adapter and diff against a committed copy of this file."

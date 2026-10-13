@@ -24,6 +24,13 @@ I2C_TransferReturn_TypeDef fake_silabs_i2c_next_result = i2cTransferDone;
 Ecode_t fake_silabs_spi_next_status = ECODE_OK;
 bool fake_silabs_spi_auto_complete = true;
 uint32_t fake_silabs_adc_next_value = 0;
+int fake_silabs_msc_init_count = 0;
+uint32_t fake_silabs_last_erase_address = 0;
+int fake_silabs_erase_call_count = 0;
+uint32_t fake_silabs_last_write_address = 0;
+uint32_t fake_silabs_last_write_num_bytes = 0;
+int fake_silabs_write_call_count = 0;
+msc_Return_TypeDef fake_silabs_msc_next_status = mscReturnOk;
 
 static bool s_gpio_state[6][16];
 static uint32_t s_usart_flags[2];
@@ -293,4 +300,38 @@ void fake_silabs_reset(void)
     memset(s_timer_flags, 0, sizeof(s_timer_flags));
     memset(s_cc_compare, 0, sizeof(s_cc_compare));
     memset(&fake_silabs_gpio_peripheral, 0, sizeof(fake_silabs_gpio_peripheral));
+    fake_silabs_msc_init_count = 0;
+    fake_silabs_last_erase_address = 0;
+    fake_silabs_erase_call_count = 0;
+    fake_silabs_last_write_address = 0;
+    fake_silabs_last_write_num_bytes = 0;
+    fake_silabs_write_call_count = 0;
+    fake_silabs_msc_next_status = mscReturnOk;
+}
+
+/* ---- Flash (em_msc) --------------------------------------------------- */
+
+void MSC_Init(void)
+{
+    fake_silabs_msc_init_count++;
+}
+
+void MSC_Deinit(void)
+{
+}
+
+msc_Return_TypeDef MSC_ErasePage(uint32_t *startAddress)
+{
+    fake_silabs_last_erase_address = (uint32_t)(uintptr_t)startAddress;
+    fake_silabs_erase_call_count++;
+    return fake_silabs_msc_next_status;
+}
+
+msc_Return_TypeDef MSC_WriteWord(uint32_t *address, const void *data, uint32_t numBytes)
+{
+    (void)data;
+    fake_silabs_last_write_address = (uint32_t)(uintptr_t)address;
+    fake_silabs_last_write_num_bytes = numBytes;
+    fake_silabs_write_call_count++;
+    return fake_silabs_msc_next_status;
 }

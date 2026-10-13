@@ -213,6 +213,37 @@ HAL_StatusTypeDef HAL_TIM_PWM_Stop(TIM_HandleTypeDef *htim, uint32_t Channel);
  * register-block pointer, so the macro just indexes it. */
 #define __HAL_TIM_SET_COMPARE(htim, channel, value) ((htim)->CCR[(channel) / 4U] = (value))
 
+/* ---- Flash ----------------------------------------------------------- */
+
+typedef struct {
+    uint32_t TypeErase;
+    uint32_t Sector;
+    uint32_t NbSectors;
+    uint32_t VoltageRange;
+} FLASH_EraseInitTypeDef;
+
+#define FLASH_TYPEPROGRAM_WORD   0x02U
+#define FLASH_TYPEERASE_SECTORS  0x00U
+#define FLASH_VOLTAGE_RANGE_3    0x02U
+
+#define FLASH_SECTOR_0   0U
+#define FLASH_SECTOR_1   1U
+#define FLASH_SECTOR_2   2U
+#define FLASH_SECTOR_3   3U
+#define FLASH_SECTOR_4   4U
+#define FLASH_SECTOR_5   5U
+#define FLASH_SECTOR_6   6U
+#define FLASH_SECTOR_7   7U
+#define FLASH_SECTOR_8   8U
+#define FLASH_SECTOR_9   9U
+#define FLASH_SECTOR_10  10U
+#define FLASH_SECTOR_11  11U
+
+void HAL_FLASH_Unlock(void);
+void HAL_FLASH_Lock(void);
+HAL_StatusTypeDef HAL_FLASH_Program(uint32_t TypeProgram, uint32_t Address, uint64_t Data);
+HAL_StatusTypeDef HAL_FLASHEx_Erase(FLASH_EraseInitTypeDef *pEraseInit, uint32_t *SectorError);
+
 #ifdef __cplusplus
 }
 #endif

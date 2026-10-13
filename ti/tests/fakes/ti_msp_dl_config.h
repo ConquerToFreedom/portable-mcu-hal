@@ -246,6 +246,26 @@ void DL_Timer_initFourCCPWMMode(GPTIMER_Regs *timer, DL_Timer_PWMConfig const *c
 void DL_Timer_setCaptureCompareValue(GPTIMER_Regs *timer, uint32_t value, DL_TIMER_CC_INDEX ccIndex);
 uint32_t DL_Timer_getCaptureCompareValue(GPTIMER_Regs *timer, DL_TIMER_CC_INDEX ccIndex);
 
+/* ---- Flash (DL_FlashCTL_*) ----------------------------------------------- */
+
+typedef struct { int _opaque; } FLASHCTL_Regs;
+
+extern FLASHCTL_Regs fake_ti_flashctl;
+#define FLASHCTL (&fake_ti_flashctl)
+
+#define DL_FLASHCTL_SECTOR_SIZE 1024U
+
+typedef enum { DL_FLASHCTL_COMMAND_SIZE_SECTOR, DL_FLASHCTL_COMMAND_SIZE_BANK } DL_FLASHCTL_COMMAND_SIZE;
+typedef enum { DL_FLASHCTL_REGION_SELECT_MAIN, DL_FLASHCTL_REGION_SELECT_NONMAIN } DL_FLASHCTL_REGION_SELECT;
+
+void DL_FlashCTL_executeClearStatus(FLASHCTL_Regs *flashctl);
+void DL_FlashCTL_unprotectSector(FLASHCTL_Regs *flashctl, uint32_t addr, DL_FLASHCTL_REGION_SELECT regionSelect);
+void DL_FlashCTL_protectSector(FLASHCTL_Regs *flashctl, uint32_t addr, DL_FLASHCTL_REGION_SELECT regionSelect);
+void DL_FlashCTL_eraseMemory(FLASHCTL_Regs *flashctl, uint32_t address, DL_FLASHCTL_COMMAND_SIZE memorySize);
+bool DL_FlashCTL_waitForCmdDone(const FLASHCTL_Regs *flashctl);
+bool DL_FlashCTL_programMemoryBlocking(FLASHCTL_Regs *flashctl, uint32_t address, uint32_t *data,
+                                       uint32_t dataSize, DL_FLASHCTL_REGION_SELECT regionSelect);
+
 #ifdef __cplusplus
 }
 #endif

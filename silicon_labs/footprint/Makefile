@@ -28,13 +28,15 @@ SRCS := \
   adc:cortex-m4:TARGET_SILABS:$(CLASSIC_INC):$(ROOT)/silicon_labs/adc/hal_port_silabs_adc.c \
   timer:cortex-m4:TARGET_SILABS:$(CLASSIC_INC):$(ROOT)/silicon_labs/timer/hal_port_silabs_timer.c \
   pwm:cortex-m4:TARGET_SILABS:$(CLASSIC_INC):$(ROOT)/silicon_labs/pwm/hal_port_silabs_pwm.c \
+  flash:cortex-m4:TARGET_SILABS:$(CLASSIC_INC):$(ROOT)/silicon_labs/flash/hal_port_silabs_flash.c \
   slgpio_gpio:cortex-m33:TARGET_SILABS_SLGPIO:$(SLGPIO_INC):$(ROOT)/silicon_labs/gpio/hal_port_silabs_slgpio.c \
   slgpio_uart:cortex-m33:TARGET_SILABS_SLGPIO:$(CLASSIC_INC):$(ROOT)/silicon_labs/uart/hal_port_silabs_slgpio_uart.c \
   slgpio_i2c:cortex-m33:TARGET_SILABS_SLGPIO:$(SLGPIO_INC):$(ROOT)/silicon_labs/i2c/hal_port_silabs_slgpio_i2c.c \
   slgpio_spi:cortex-m33:TARGET_SILABS_SLGPIO:$(CLASSIC_INC):$(ROOT)/silicon_labs/spi/hal_port_silabs_slgpio_spi.c \
   slgpio_adc:cortex-m33:TARGET_SILABS_SLGPIO:$(SLGPIO_INC):$(ROOT)/silicon_labs/adc/hal_port_silabs_slgpio_adc.c \
   slgpio_timer:cortex-m33:TARGET_SILABS_SLGPIO:$(SLGPIO_INC):$(ROOT)/silicon_labs/timer/hal_port_silabs_slgpio_timer.c \
-  slgpio_pwm:cortex-m33:TARGET_SILABS_SLGPIO:$(SLGPIO_INC):$(ROOT)/silicon_labs/pwm/hal_port_silabs_slgpio_pwm.c
+  slgpio_pwm:cortex-m33:TARGET_SILABS_SLGPIO:$(SLGPIO_INC):$(ROOT)/silicon_labs/pwm/hal_port_silabs_slgpio_pwm.c \
+  slgpio_flash:cortex-m33:TARGET_SILABS_SLGPIO:$(CLASSIC_INC):$(ROOT)/silicon_labs/flash/hal_port_silabs_slgpio_flash.c
 
 .PHONY: all clean report
 

@@ -63,6 +63,23 @@ extern DL_TIMER_IIDX fake_ti_timer_pending_interrupt;
  * adapter's own static state. */
 uint32_t fake_ti_get_cc_value(GPTIMER_Regs *timer, DL_TIMER_CC_INDEX ccIndex);
 
+/* ---- Flash (DL_FlashCTL_*) --------------------------------------------------- */
+/* DL_FlashCTL_eraseMemory/programMemoryBlocking never touch real
+ * memory here - these just record what the adapter last asked for,
+ * and how many times, for assertions. */
+extern int fake_ti_flash_clear_status_count;
+extern int fake_ti_flash_unprotect_count;
+extern uint32_t fake_ti_flash_last_erase_address;
+extern int fake_ti_flash_erase_call_count;
+/* DL_FlashCTL_waitForCmdDone()'s next return value (default true). */
+extern bool fake_ti_flash_wait_done_result;
+extern uint32_t fake_ti_flash_last_program_address;
+extern uint32_t fake_ti_flash_last_program_data_size;
+extern int fake_ti_flash_program_call_count;
+/* DL_FlashCTL_programMemoryBlocking()'s next return value (default
+ * true). */
+extern bool fake_ti_flash_program_result;
+
 #ifdef __cplusplus
 }
 #endif

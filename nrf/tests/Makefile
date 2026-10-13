@@ -22,8 +22,9 @@ SPI   := $(ROOT)/nrf/spi/hal_port_nrf52_spi.c
 ADC   := $(ROOT)/nrf/adc/hal_port_nrf52_adc.c
 TIMER := $(ROOT)/nrf/timer/hal_port_nrf52_timer.c
 PWM   := $(ROOT)/nrf/pwm/hal_port_nrf52_pwm.c
+FLASH := $(ROOT)/nrf/flash/hal_port_nrf52_flash.c
 
-TESTS := gpio uart i2c spi adc timer pwm
+TESTS := gpio uart i2c spi adc timer pwm flash
 
 .PHONY: all clean report $(TESTS)
 
@@ -46,6 +47,8 @@ timer: $(BUILD)
 	$(CC) $(CFLAGS) $(INC) test_timer.c $(FAKE) $(TIMER) $(UNITY) -o $(BUILD)/test_$@
 pwm: $(BUILD)
 	$(CC) $(CFLAGS) $(INC) test_pwm.c $(FAKE) $(PWM) $(UNITY) -o $(BUILD)/test_$@
+flash: $(BUILD)
+	$(CC) $(CFLAGS) $(INC) test_flash.c $(FAKE) $(FLASH) $(UNITY) -o $(BUILD)/test_$@
 
 clean:
 	rm -rf $(BUILD)

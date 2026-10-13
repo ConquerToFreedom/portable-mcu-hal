@@ -19,7 +19,8 @@ SRCS := \
   spi:$(ROOT)/nrf/spi/hal_port_nrf52_spi.c \
   adc:$(ROOT)/nrf/adc/hal_port_nrf52_adc.c \
   timer:$(ROOT)/nrf/timer/hal_port_nrf52_timer.c \
-  pwm:$(ROOT)/nrf/pwm/hal_port_nrf52_pwm.c
+  pwm:$(ROOT)/nrf/pwm/hal_port_nrf52_pwm.c \
+  flash:$(ROOT)/nrf/flash/hal_port_nrf52_flash.c
 
 .PHONY: all clean report
 

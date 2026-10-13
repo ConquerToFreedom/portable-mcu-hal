@@ -1,6 +1,6 @@
 # TI MSPM0 adapter unit tests
 
-Each of this vendor's 7 adapter files has a matching `test_<peripheral>.c` here, built and run on
+Each of this vendor's 8 adapter files has a matching `test_<peripheral>.c` here, built and run on
 the host — no vendor SDK or real hardware needed. Run everything with:
 
 ```

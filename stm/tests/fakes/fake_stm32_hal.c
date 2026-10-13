@@ -14,6 +14,15 @@ const uint8_t *fake_stm32_last_tx_data;
 uint16_t fake_stm32_last_tx_len;
 uint8_t *fake_stm32_last_rx_buf;
 
+uint32_t fake_stm32_last_erase_sector;
+uint32_t fake_stm32_last_erase_nb_sectors;
+int fake_stm32_erase_call_count;
+uint32_t fake_stm32_last_program_address;
+uint64_t fake_stm32_last_program_data;
+int fake_stm32_program_call_count;
+int fake_stm32_flash_lock_count;
+int fake_stm32_flash_unlock_count;
+
 GPIO_TypeDef fake_stm32_gpioa_storage;
 GPIO_TypeDef fake_stm32_gpiob_storage;
 GPIO_TypeDef fake_stm32_gpioc_storage;
@@ -41,6 +50,14 @@ void fake_stm32_reset(void)
     fake_stm32_last_tx_data = NULL;
     fake_stm32_last_tx_len = 0;
     fake_stm32_last_rx_buf = NULL;
+    fake_stm32_last_erase_sector = 0;
+    fake_stm32_last_erase_nb_sectors = 0;
+    fake_stm32_erase_call_count = 0;
+    fake_stm32_last_program_address = 0;
+    fake_stm32_last_program_data = 0;
+    fake_stm32_program_call_count = 0;
+    fake_stm32_flash_lock_count = 0;
+    fake_stm32_flash_unlock_count = 0;
     memset(s_gpio_odr, 0, sizeof(s_gpio_odr));
     memset(s_gpio_idr, 0, sizeof(s_gpio_idr));
     s_i2c_state = HAL_I2C_STATE_READY;
@@ -346,5 +363,33 @@ HAL_StatusTypeDef HAL_TIM_PWM_Start(TIM_HandleTypeDef *htim, uint32_t Channel)
 HAL_StatusTypeDef HAL_TIM_PWM_Stop(TIM_HandleTypeDef *htim, uint32_t Channel)
 {
     (void)htim; (void)Channel;
+    return fake_stm32_next_status;
+}
+
+void HAL_FLASH_Unlock(void)
+{
+    fake_stm32_flash_unlock_count++;
+}
+
+void HAL_FLASH_Lock(void)
+{
+    fake_stm32_flash_lock_count++;
+}
+
+HAL_StatusTypeDef HAL_FLASH_Program(uint32_t TypeProgram, uint32_t Address, uint64_t Data)
+{
+    (void)TypeProgram;
+    fake_stm32_last_program_address = Address;
+    fake_stm32_last_program_data = Data;
+    fake_stm32_program_call_count++;
+    return fake_stm32_next_status;
+}
+
+HAL_StatusTypeDef HAL_FLASHEx_Erase(FLASH_EraseInitTypeDef *pEraseInit, uint32_t *SectorError)
+{
+    *SectorError = 0xFFFFFFFFU;
+    fake_stm32_last_erase_sector = pEraseInit->Sector;
+    fake_stm32_last_erase_nb_sectors = pEraseInit->NbSectors;
+    fake_stm32_erase_call_count++;
     return fake_stm32_next_status;
 }

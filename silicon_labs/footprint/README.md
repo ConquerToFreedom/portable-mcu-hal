@@ -1,7 +1,7 @@
 # Silicon Labs adapter footprint measurement
 
-Measures how much flash (`.text`) and RAM (`.data`+`.bss`) each of this vendor's 14 adapter files
-(5 peripherals × 2 SDK generations) costs on its real target core, using a real ARM
+Measures how much flash (`.text`) and RAM (`.data`+`.bss`) each of this vendor's 16 adapter files
+(8 peripherals × 2 SDK generations) costs on its real target core, using a real ARM
 cross-compiler (`arm-none-eabi-gcc`) — not the host `gcc` `../tests/` uses. Classic emlib
 (`TARGET_SILABS`) builds for Cortex-M4; the current sl_gpio/sl_i2c/IADC drivers
 (`TARGET_SILABS_SLGPIO`) build for Cortex-M33, since Series 2/3 parts use that core. See

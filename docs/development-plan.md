@@ -318,6 +318,85 @@ new "ADC, part two" section. Real compilation and hardware
 verification remain open for all five — same standing gap as every
 adapter in this repo.
 
+## Unit tests and flash/RAM footprint measurement for Flash — all 40 adapters [DONE]
+
+Requested once Flash's vendor adapters existed, extending the same per-vendor
+infrastructure again: 5 new adapter files (1 each for STM32/nRF52/TI, 2 for
+Silicon Labs — classic and current both use the same `em_msc.h` calls, see
+below). 57 new Unity tests across 5 new test files (13 STM32, 11 nRF52, 12 TI,
+21 Silicon Labs [12 classic + 9 current]), plus the same real
+`arm-none-eabi-gcc` footprint measurement. This brings the wrapper to 40 total
+adapter files, 269 total tests, all passing.
+
+One finding common to every vendor's test, not specific to any single one:
+`hf_flash_read()`'s raw-pointer `memcpy` segfaulted the first time its test
+ran on every vendor — `hf_flash_t`'s address parameter is a 32-bit chip
+address by design (every target here is a 32-bit MCU), but this test suite
+runs on a 64-bit host, so a stack/static buffer's real pointer truncated
+to `uint32_t` points at garbage. Fixed in every `test_flash.c`/
+`test_silabs*_flash.c` (not the adapters, which are correct as designed for
+their real target) via a Linux `mmap(..., MAP_32BIT, ...)` mapping so the
+truncation is lossless on this host.
+
+While extending `silicon_labs/footprint/generate_report.sh` for Flash, found
+a real pre-existing bug: its summary-table loops hardcoded only
+GPIO/UART/I2C/SPI/ADC, so Timer and PWM (added in the previous pass) were
+silently missing from the table and its `.text` total the whole time, though
+still correctly listed in the "Largest functions" section below the table.
+Fixed to include Timer/PWM/Flash in both loops.
+
+Also installed `gcc-arm-none-eabi` via `apt` for this pass — the earlier
+xPack-GitHub-download workaround noted below wasn't needed this time; the
+Ubuntu mirror wasn't throttled this session. Keep the workaround documented
+regardless, since whether the mirror is slow varies by environment/session,
+not by anything this repo controls.
+
+Full per-vendor detail in `docs/architecture.md`'s "Flash" section and each
+vendor's `tests/TEST_REPORT.md`.
+
+## Flash portion — vendor adapters implemented for all five targets
+
+Requested as the next peripheral after PWM, with Watchdog considered and set
+aside first (see the decisions log in `docs/architecture.md`). `hf_flash_t`
+is the one peripheral in `include/hal_wrapper.h` with no opaque instance
+type at all — internal flash is a single, singular region per chip on every
+vendor here, so the API is addressed directly by raw chip memory address:
+`hf_flash_init()`, `hf_flash_erase_size(address)` (takes an address, not a
+zero-arg constant, specifically because STM32's F4-family sector table is
+non-uniform — 16/64/128 KB sectors in the same bank), `hf_flash_write_align()`,
+`hf_flash_erase(address, length)`, `hf_flash_write(address, data, length)`,
+`hf_flash_read(address, data, length)`.
+
+The one cross-vendor safety finding big enough to get its own loud header
+comment, the same treatment PWM's shared-frequency caveat got: every
+adapter's normal, flash-resident blocking erase/program call is unsafe
+against the bank the CPU is currently executing from — TI's driverlib ships
+separate RAM-executed variants for exactly this reason, ST's own
+FLASH_EraseProgram example warns about it directly, and Silicon Labs' MSC
+write functions are placed in RAM by the SDK's own build system on affected
+parts. v1 implements only the normal calls — confine this API to a
+linker-reserved storage region, never the code/vector-table/const-data
+region. RAM-executed variants are backlog.
+
+Vendor adapters written for all five target macros: STM32 (F4-family sector
+table, `HAL_FLASHEx_Erase`/`HAL_FLASH_Program`), nRF52 (`nrfx_nvmc`, uniform
+4096-byte pages, SoftDevice coexistence flagged as not handled), Silicon
+Labs classic (`em_msc.h`, `MSC_Init()` required before any write/erase — the
+same category of real per-vendor requirement this project's GPIO
+clock-enable bug-fix precedent established), Silicon Labs current (a genuine
+finding: uses the SAME `em_msc.h` calls as classic, since there is no
+distinct current-SDK driver at this level — Silicon Labs' current-generation
+flash story, NVM3, is a wear-leveled store built on the same MSC peripheral,
+and `hf_flash_t` is explicitly scoped to raw flash, not a filesystem), and TI
+MSPM0 (`DL_FlashCTL_*`, confirmed 1024-byte `DL_FLASHCTL_SECTOR_SIZE` and
+64-bit flash words directly against `dl_flashctl.h` on GitHub — TI's own
+docs domain was blocked in this environment again, same fallback this
+vendor's ADC/SPI/Timer adapters already used).
+
+Full per-vendor rationale in `docs/architecture.md`'s new "Flash" section.
+Real compilation and hardware verification remain open for all five — same
+standing gap as every adapter in this repo.
+
 ## Unit tests and flash/RAM footprint measurement — all 25 adapters [DONE]
 
 Requested after all 25 adapter files (5 peripherals × 5 target macros) existed:
@@ -605,3 +684,12 @@ same gap as every other adapter so far.
 - PWM complementary/dead-time-inserted channel pairs (H-bridge
   motor-control driving) — out of scope for this project's "thin
   wrapper" ambitions unless that changes
+- Flash RAM-executed erase/program variants, needed only by a caller that
+  must modify the bank it's currently executing from — a materially bigger
+  feature (linker-script RAM placement) than this project's other backlog
+  deferrals
+- Flash async/callback-driven tier — judged not worth the complexity for
+  v1's rare, slow, one-at-a-time erase/program operations
+- Watchdog (WDT) — considered as the peripheral after PWM, set aside in
+  favor of Flash; still a good fit for this project's pattern (uniform
+  across all four vendor lines) whenever picked back up

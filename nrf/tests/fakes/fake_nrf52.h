@@ -13,6 +13,7 @@
 #include "nrfx_saadc.h"
 #include "nrfx_timer.h"
 #include "nrfx_pwm.h"
+#include "nrfx_nvmc.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -90,6 +91,17 @@ bool fake_nrf52_pwm_is_playing(int slot);
  * instance - dereference ->values.p_individual->channel_N directly to
  * assert on duty values the adapter wrote into its own static buffer. */
 nrf_pwm_sequence_t const *fake_nrf52_pwm_last_sequence(int slot);
+
+/* ---- Flash (nrfx_nvmc) --------------------------------------------------- */
+/* nrfx_nvmc_page_erase/words_write never touch real memory here (same
+ * as every other fake nrfx_* call in this file) - these just record
+ * what the adapter last asked for, and how many times, for
+ * assertions. */
+extern uint32_t fake_nrf52_last_erase_address;
+extern int fake_nrf52_erase_call_count;
+extern uint32_t fake_nrf52_last_write_address;
+extern uint32_t fake_nrf52_last_write_num_words;
+extern int fake_nrf52_write_call_count;
 
 #ifdef __cplusplus
 }
