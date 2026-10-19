@@ -216,3 +216,51 @@ and use the real `$SIMPLICITY_SDK_PATH` instead of its old static
 **Next entry will be:** whether this run's `slc configuration` step
 succeeds, and if so, the first real signal on `slc generate` against
 the guessed `blink_baremetal` example path.
+
+## Entry 6 — Dockerfile fully works end to end; `--load` picked the wrong-arch image
+
+[Run 5](https://github.com/hardfault-in/portable-mcu-hal/actions/runs/39341962056) —
+**the whole Dockerfile succeeded.** Path discovery found real values
+for all three markers:
+```
+GCC_ARM_NONE_EABI_PATH=.../gcc-a469753773d4f2/p
+SLC_BIN_DIR=.../slc-cli-v6.0.25/slc_cli
+SIMPLICITY_SDK_PATH=.../simpleca33d691c539/p/platform_core
+```
+and `slc configuration --sdk=... --gcc-toolchain=...` ran successfully
+(printing a deprecation notice recommending `.slconf` files /
+`--sdk-package-path` instead — noted for later, not acted on yet,
+since the deprecated form still works).
+
+Note: `SIMPLICITY_SDK_PATH` resolved one level deeper than expected —
+`.../p/platform_core`, not `.../p` — because the `platform/driver/gpio`
+marker lives under a `platform_core` subdirectory. Under the 2025.12
+Conan-based modular package split, "the SDK" may no longer be one flat
+tree with `app/` at its root the way the pre-2025.12 Gecko SDK was —
+`app/common/example/...` might be a sibling package, not a subfolder
+of `platform_core`. Flagging this now rather than assuming the
+existing `blink_baremetal` guess in `build_in_container.sh` still
+makes sense; the next `slc generate` attempt will show directly
+whether it does.
+
+**New failure, one layer out:** after the Docker image built, `docker
+run`ning it hit `/usr/bin/bash: cannot execute binary file` (exit
+126) — a classic wrong-architecture symptom, immediately after an
+unusually long (~6 minute) `exporting to docker image format` →
+`sending tarball` → `importing to docker` → `loading layer` sequence
+for what should be a simple same-host `--load`. Root cause: modern
+BuildKit's default provenance/SBOM attestations produce a multi-
+manifest image, and `--load` can end up importing the wrong
+manifest's layers. This is a known `docker buildx build --load`
+gotcha, not something specific to this Dockerfile.
+
+**Fix:** added `--provenance=false --sbom=false --platform=linux/amd64`
+to `scripts/build.sh`'s `docker buildx build` call.
+
+**Not verified locally this round** — Docker Hub rate-limited every
+image pull from this sandbox (`429 Too Many Requests`, both
+`ubuntu:24.04` and `alpine:latest`), unrelated to the fix itself.
+Confidence here comes from this being a well-understood, widely-
+documented BuildKit behavior (disabling attestations to get a clean
+single-manifest `--load` result), not a fresh guess — the next CI run
+is still the real confirmation.

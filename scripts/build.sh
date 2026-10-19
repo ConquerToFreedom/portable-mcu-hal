@@ -64,8 +64,19 @@ echo "== building docker image: $IMAGE (from $DOCKERFILE) =="
 # DOCKER_BUILD_EXTRA_ARGS lets CI opt into registry/GHA layer caching
 # (e.g. "--cache-from=type=gha --cache-to=type=gha,mode=max") without
 # this script needing to know it's running in CI. Empty/unset locally.
+#
+# --provenance=false --sbom=false: CONFIRMED NEEDED (first real CI
+# run against this image) — without them, `buildx build --load`'s
+# default attestation/provenance output produces a multi-manifest
+# image, and the one `--load` actually imports can end up the wrong
+# one: `docker run` on it failed with
+# "/usr/bin/bash: cannot execute binary file" (exit 126), a classic
+# wrong-architecture symptom, even though the image was built on and
+# for the same amd64 runner. --platform is pinned explicitly for the
+# same reason, rather than relying on the builder's default.
 # shellcheck disable=SC2086
-docker buildx build --load ${DOCKER_BUILD_EXTRA_ARGS:-} \
+docker buildx build --load --provenance=false --sbom=false --platform=linux/amd64 \
+    ${DOCKER_BUILD_EXTRA_ARGS:-} \
     -t "$IMAGE" -f "$DOCKERFILE" "$(dirname "$DOCKERFILE")"
 
 OUT_DIR="out/$VENDOR"
