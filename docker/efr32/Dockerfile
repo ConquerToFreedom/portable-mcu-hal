@@ -79,7 +79,11 @@ cmake = "~"
 ninja = "~"
 commander = "~"
 EOF
-RUN slt install -f /tmp/recipe.toml --non-interactive
+# Redirect-then-cat (not `| tee`) deliberately: piping through tee
+# would make this RUN step's exit code tee's (always 0), silently
+# hiding a real `slt install` failure from `docker build`.
+RUN slt install -f /tmp/recipe.toml --non-interactive > /tmp/install.log 2>&1; \
+    ec=$?; cat /tmp/install.log; exit $ec
 
 # ---------------------------------------------------------------------
 # 3. Discover where SLT actually put things and configure slc-cli.
@@ -89,51 +93,39 @@ RUN slt install -f /tmp/recipe.toml --non-interactive
 # non-predictable path per package (e.g.
 # /root/.silabs/slt/installs/conan/p/simpleca33d691c539/p for
 # simplicity-sdk) — NOT the flat ${SLT_HOME}/<pkg-name> layout this
-# file originally guessed. `slt install`'s plain-text output lists
-# each package's real Id/Version/Path, so re-running it with the
-# documented global `--json` flag and parsing that is the reliable way
-# to find these paths rather than hardcoding them. `docker/efr32/
-# build_in_container.sh` sources the resulting /opt/slt/paths.env.
+# file originally guessed.
 #
-# EDIT-ME: the exact top-level shape of `slt install --json`'s output
-# is not independently confirmed (only the plain-text Id/Version/Path
-# block has been seen for real) — the parser below searches
-# recursively for any {Id|id, Path|path} pair so it's tolerant of
-# reasonable shape differences, but confirm against the real
-# /tmp/install.json (printed below) if this step fails.
+# CONFIRMED-WRONG (third CI run): `slt install --json`'s output is
+# NOT the same Id/Version/Path block as the plain-text output — it's
+# just `{"lock": "/tmp/recipe.lock"}`, a pointer to a lock file, not
+# inline package details. Parsing it found nothing, left paths.env
+# empty, and `slc configuration` failed with "slc: not found" since
+# its own install dir never made it onto PATH.
+#
+# FIX: `tee` the ORIGINAL plain-text install log (step 2 above, now
+# confirmed twice to contain real "  Id: <x>" / "  Path: <y>" blocks)
+# instead of relying on --json at all, and parse that line-by-line:
+# whenever an "Id:" line is seen, remember it as the current package;
+# the next "Path:" line is paired with it. `docker/efr32/
+# build_in_container.sh` sources the resulting /opt/slt/paths.env.
 # ---------------------------------------------------------------------
-RUN slt install -f /tmp/recipe.toml --non-interactive --json > /tmp/install.json; \
-    cat /tmp/install.json
-
-# NOTE: this uses BuildKit's heredoc RUN form (plain `<<'PYEOF' ... PYEOF`,
-# same as the recipe.toml heredoc above) specifically because a
-# python3 -c "<multi-line>" argument does NOT work the same way — the
-# Dockerfile instruction parser ends a shell-form RUN at the first
-# newline not preceded by a backslash, UNLESS it's inside a `<<TOKEN`
-# heredoc, which it does track across lines. Confirmed locally with a
-# throwaway Dockerfile before relying on it here (python3 -c with an
-# embedded newline genuinely fails: "unknown instruction: import").
 RUN python3 - <<'PYEOF'
-import json
+import re
 
-with open('/tmp/install.json') as f:
-    data = json.load(f)
+with open('/tmp/install.log') as f:
+    lines = f.readlines()
 
 paths = {}
-
-def walk(obj):
-    if isinstance(obj, dict):
-        ident = obj.get('Id') or obj.get('id')
-        path = obj.get('Path') or obj.get('path')
-        if ident and path:
-            paths[ident] = path
-        for v in obj.values():
-            walk(v)
-    elif isinstance(obj, list):
-        for item in obj:
-            walk(item)
-
-walk(data)
+current_id = None
+for line in lines:
+    m = re.match(r'\s*Id:\s*(\S+)', line)
+    if m:
+        current_id = m.group(1)
+        continue
+    m = re.match(r'\s*Path:\s*(\S+)', line)
+    if m and current_id:
+        paths[current_id] = m.group(1)
+        current_id = None
 
 with open('/opt/slt/paths.env', 'w') as f:
     for ident, path in paths.items():
@@ -141,6 +133,8 @@ with open('/opt/slt/paths.env', 'w') as f:
         f.write(f'export {var}_PATH="{path}"\n')
     f.write('export PATH="${SLC_CLI_PATH:-}/bin:${GCC_ARM_NONE_EABI_PATH:-}/bin:$PATH"\n')
 
+print('--- parsed package paths ---')
+print(paths)
 print('--- /opt/slt/paths.env ---')
 with open('/opt/slt/paths.env') as f:
     print(f.read())

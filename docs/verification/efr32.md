@@ -135,3 +135,43 @@ with every step after that unreached but now syntax-checked.
 `slt install` to fully succeed this time, `slc configuration` to run
 against the real discovered paths, and the first real signal on
 `slc generate`/the smoke test's own build (Phase 1's actual goal).
+
+## Entry 4 — `slt install` fully succeeded; `--json` doesn't give package details
+
+[Run 3](https://github.com/hardfault-in/portable-mcu-hal/actions/runs/39340851747) —
+**`slt install` completed with every package installed**, including
+`commander` (confirms the `bzip2`/`xz-utils` fix): `Installation
+completed; lock file: /tmp/recipe.lock`.
+
+**Failed at:** the NEXT step, `slc configuration` — `slc: not found`.
+Root cause: `slt install -f ... --non-interactive --json` (run a
+second time to get machine-readable output) printed only
+`{"lock": "/tmp/recipe.lock"}` — a pointer to a lock file, not the
+Id/Version/Path block the plain-text run shows. My parser found
+nothing, `paths.env` had no real paths in it, so `slc`'s install
+directory never reached `PATH`.
+
+**Fix:** stopped relying on `--json` at all. `tee`'d (well — actually
+redirected, see below) the *original* `slt install` call's plain-text
+output to `/tmp/install.log` and switched the parser to scan that
+line-by-line, pairing each `Id:` line with the `Path:` line that
+follows it — the exact format confirmed real across two separate runs
+now. Tested the parser against the real captured log text from Run 2
+locally before pushing; it correctly extracts `simplicity-sdk`,
+`gcc-arm-none-eabi`, and `slc-cli`'s real paths.
+
+**Caught and fixed before pushing, by testing locally first (again no
+silabs.com access needed for this part):** my first instinct was
+`slt install ... | tee /tmp/install.log`, but that makes the RUN
+step's exit code `tee`'s (always 0) instead of `slt install`'s — a
+real install failure would have been silently swallowed. Switched to
+redirecting to a file, capturing `$?` explicitly, catting the log
+either way, then re-exiting with the real code — verified the exit
+code propagates correctly with a standalone `sh -c` test before
+editing the real Dockerfile.
+
+**Still true:** this sandbox's own `docker buildx build` syntax-check
+hit an unrelated Docker Hub rate limit (`429 Too Many Requests` on the
+`ubuntu:24.04` pull) this round, so this iteration's confidence comes
+from the isolated unit tests above, not a local full-file build. The
+next CI run is still the real check.
