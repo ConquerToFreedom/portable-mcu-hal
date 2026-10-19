@@ -91,5 +91,47 @@ an OAuth token (`--token-file`/`$SLT_SECURE_TOKEN`) to actually pull
 token is required, that's an account/credential the maintainer needs
 to provide — not something to work around silently.
 
-**Next entry will be:** the next CI run's result for the `slt install`
-step specifically.
+## Entry 3 — `slt install` fully works; fixed a missing dep and a bad path guess
+
+[Run 2](https://github.com/hardfault-in/portable-mcu-hal/actions/runs/39340042916) —
+**major confirmation**: `--non-interactive` alone was enough. No
+account, token, or EULA prompt at all. It actually installed
+`simplicity-sdk 2026.6.1` (the exact pinned version), `slc-cli 6.0.25`,
+`gcc-arm-none-eabi 14.2.rel1`, `cmake 3.30.2`, `ninja 1.12.1`.
+
+**Failed at:** `commander/1.25.0` extraction —
+`tar (child): bzip2: Cannot exec: No such file or directory`. The base
+image was missing `bzip2`. **Fix:** added `bzip2 xz-utils` to the
+`apt-get install` line.
+
+**Also fixed proactively from the same log**, before pushing again:
+the real install paths SLT printed are hashed Conan paths like
+`/root/.silabs/slt/installs/conan/p/simpleca33d691c539/p` for
+`simplicity-sdk` — nothing like the flat `${SLT_HOME}/simplicity-sdk`
+this file originally guessed for the `slc configuration --sdk=...
+--gcc-toolchain=...` step. Rewrote that step to run `slt install
+--json`, parse the real paths out of it with a small Python script,
+and write them to `/opt/slt/paths.env` for later steps to source,
+instead of hardcoding a path that was already proven wrong.
+
+**Caught and fixed before pushing, by testing locally first** (this
+part needed no silabs.com access, so there was no excuse to push
+blind): the Python step was originally written as `python3 -c "<multi-
+line>"`, which doesn't work — a Dockerfile RUN instruction ends at the
+first newline not preceded by `\`, *unless* it's inside a `<<TOKEN`
+heredoc (which IS tracked across lines). Confirmed with a disposable
+test Dockerfile (`unknown instruction: import`), fixed by switching to
+the same heredoc form (`python3 - <<'PYEOF' ... PYEOF`) already used
+for the recipe.toml step, and re-verified the fixed version builds
+correctly in isolation before editing the real file.
+
+**Also verified locally (as far as this sandbox can go):** `docker
+buildx build` against the real, current Dockerfile parses with no
+syntax errors and runs every step up through `apt-get install` —
+failing, exactly as expected, at the one `curl` to `www.silabs.com`,
+with every step after that unreached but now syntax-checked.
+
+**Next entry will be:** the next CI run's result — expecting
+`slt install` to fully succeed this time, `slc configuration` to run
+against the real discovered paths, and the first real signal on
+`slc generate`/the smoke test's own build (Phase 1's actual goal).

@@ -32,7 +32,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PATH=/opt/slt:/opt/slt/bin:${PATH}
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates curl unzip git make python3 \
+        ca-certificates curl unzip git make python3 bzip2 xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------------------
@@ -63,10 +63,12 @@ RUN mkdir -p ${SLT_HOME} && cd ${SLT_HOME} \
 # real flags are --check-updates/-e/-f/--force/--no-lock/-s plus the
 # GLOBAL flags --json/--non-interactive/--token-file/--version — there
 # is no --accept-licenses or --yes. Using --non-interactive instead.
-# Still unconfirmed: whether --non-interactive alone is enough to get
-# past any license/EULA prompt non-interactively, or whether it needs
-# --token-file/an OAuth token (the flag's own description mentions
-# $SLT_SECURE_TOKEN) — that's what the NEXT CI run will show.
+# CONFIRMED (second CI run, same day): --non-interactive alone is
+# enough — no token/account/EULA prompt at all. It installed
+# simplicity-sdk 2026.6.1 (the exact pin), slc-cli 6.0.25,
+# gcc-arm-none-eabi 14.2.rel1, cmake 3.30.2, ninja 1.12.1 successfully;
+# the only failure was `commander` needing `bzip2` on the base image
+# (fixed above, in the apt-get install line).
 # ---------------------------------------------------------------------
 RUN cat > /tmp/recipe.toml <<EOF
 [dependency]
@@ -80,16 +82,73 @@ EOF
 RUN slt install -f /tmp/recipe.toml --non-interactive
 
 # ---------------------------------------------------------------------
-# 3. One-time slc-cli configuration: point it at the installed SDK and
-# the gcc-arm-none-eabi toolchain SLT just installed.
-# EDIT-ME: exact installed paths below are guesses (SLT's own install
-# layout under $SLT_HOME) — confirm with `slt list --installed` (or
-# equivalent) once this runs for real, and fix the two --sdk/
-# --gcc-toolchain paths below.
+# 3. Discover where SLT actually put things and configure slc-cli.
+#
+# CONFIRMED (second CI run): SLT installs packages under
+# /root/.silabs/slt/installs/{conan,archive}/... with a hashed,
+# non-predictable path per package (e.g.
+# /root/.silabs/slt/installs/conan/p/simpleca33d691c539/p for
+# simplicity-sdk) — NOT the flat ${SLT_HOME}/<pkg-name> layout this
+# file originally guessed. `slt install`'s plain-text output lists
+# each package's real Id/Version/Path, so re-running it with the
+# documented global `--json` flag and parsing that is the reliable way
+# to find these paths rather than hardcoding them. `docker/efr32/
+# build_in_container.sh` sources the resulting /opt/slt/paths.env.
+#
+# EDIT-ME: the exact top-level shape of `slt install --json`'s output
+# is not independently confirmed (only the plain-text Id/Version/Path
+# block has been seen for real) — the parser below searches
+# recursively for any {Id|id, Path|path} pair so it's tolerant of
+# reasonable shape differences, but confirm against the real
+# /tmp/install.json (printed below) if this step fails.
 # ---------------------------------------------------------------------
-RUN slc configuration \
-      --sdk="${SLT_HOME}/simplicity-sdk" \
-      --gcc-toolchain="${SLT_HOME}/gcc-arm-none-eabi"
+RUN slt install -f /tmp/recipe.toml --non-interactive --json > /tmp/install.json; \
+    cat /tmp/install.json
+
+# NOTE: this uses BuildKit's heredoc RUN form (plain `<<'PYEOF' ... PYEOF`,
+# same as the recipe.toml heredoc above) specifically because a
+# python3 -c "<multi-line>" argument does NOT work the same way — the
+# Dockerfile instruction parser ends a shell-form RUN at the first
+# newline not preceded by a backslash, UNLESS it's inside a `<<TOKEN`
+# heredoc, which it does track across lines. Confirmed locally with a
+# throwaway Dockerfile before relying on it here (python3 -c with an
+# embedded newline genuinely fails: "unknown instruction: import").
+RUN python3 - <<'PYEOF'
+import json
+
+with open('/tmp/install.json') as f:
+    data = json.load(f)
+
+paths = {}
+
+def walk(obj):
+    if isinstance(obj, dict):
+        ident = obj.get('Id') or obj.get('id')
+        path = obj.get('Path') or obj.get('path')
+        if ident and path:
+            paths[ident] = path
+        for v in obj.values():
+            walk(v)
+    elif isinstance(obj, list):
+        for item in obj:
+            walk(item)
+
+walk(data)
+
+with open('/opt/slt/paths.env', 'w') as f:
+    for ident, path in paths.items():
+        var = ident.upper().replace('-', '_')
+        f.write(f'export {var}_PATH="{path}"\n')
+    f.write('export PATH="${SLC_CLI_PATH:-}/bin:${GCC_ARM_NONE_EABI_PATH:-}/bin:$PATH"\n')
+
+print('--- /opt/slt/paths.env ---')
+with open('/opt/slt/paths.env') as f:
+    print(f.read())
+PYEOF
+
+RUN . /opt/slt/paths.env && slc configuration \
+      --sdk="${SIMPLICITY_SDK_PATH}" \
+      --gcc-toolchain="${GCC_ARM_NONE_EABI_PATH}"
 
 WORKDIR /work
 ENTRYPOINT ["/bin/bash"]
