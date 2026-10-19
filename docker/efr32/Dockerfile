@@ -28,7 +28,6 @@ ARG SLT_CLI_VERSION=1.2.2
 
 ENV DEBIAN_FRONTEND=noninteractive \
     SLT_HOME=/opt/slt \
-    SISDK=/opt/slt/simplicity-sdk \
     PATH=/opt/slt:/opt/slt/bin:${PATH}
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -79,11 +78,12 @@ cmake = "~"
 ninja = "~"
 commander = "~"
 EOF
-# Redirect-then-cat (not `| tee`) deliberately: piping through tee
-# would make this RUN step's exit code tee's (always 0), silently
-# hiding a real `slt install` failure from `docker build`.
-RUN slt install -f /tmp/recipe.toml --non-interactive > /tmp/install.log 2>&1; \
-    ec=$?; cat /tmp/install.log; exit $ec
+# No output redirection here on purpose: `slt install` only prints its
+# readable "Installed Packages" summary when it detects a TTY (see
+# step 3's own note below, found the hard way) — redirecting would
+# both lose that summary from the build log AND gain nothing, since
+# step 3 no longer parses it anyway.
+RUN slt install -f /tmp/recipe.toml --non-interactive
 
 # ---------------------------------------------------------------------
 # 3. Discover where SLT actually put things and configure slc-cli.
@@ -96,48 +96,65 @@ RUN slt install -f /tmp/recipe.toml --non-interactive > /tmp/install.log 2>&1; \
 # file originally guessed.
 #
 # CONFIRMED-WRONG (third CI run): `slt install --json`'s output is
-# NOT the same Id/Version/Path block as the plain-text output — it's
-# just `{"lock": "/tmp/recipe.lock"}`, a pointer to a lock file, not
-# inline package details. Parsing it found nothing, left paths.env
-# empty, and `slc configuration` failed with "slc: not found" since
-# its own install dir never made it onto PATH.
+# just `{"lock": "/tmp/recipe.lock"}`, not inline package details.
 #
-# FIX: `tee` the ORIGINAL plain-text install log (step 2 above, now
-# confirmed twice to contain real "  Id: <x>" / "  Path: <y>" blocks)
-# instead of relying on --json at all, and parse that line-by-line:
-# whenever an "Id:" line is seen, remember it as the current package;
-# the next "Path:" line is paired with it. `docker/efr32/
-# build_in_container.sh` sources the resulting /opt/slt/paths.env.
+# CONFIRMED-WRONG (fourth CI run): redirecting `slt install`'s plain-
+# text output to a file (`> /tmp/install.log`) also doesn't work — the
+# "Installed Packages:" Id/Version/Path summary block seen directly in
+# BuildKit's own captured RUN output (runs 2 and 3) never reaches the
+# file; `slt` evidently only prints that pretty summary when it
+# detects a TTY, and suppresses it when stdout is redirected. Parsing
+# the file found nothing again.
+#
+# FIX: stop depending on slt's own summary output entirely. Instead,
+# search the filesystem SLT actually populated for real, known marker
+# files/dirs: `bin/arm-none-eabi-gcc` for the gcc-arm-none-eabi root,
+# an `slc` executable for slc-cli's bin dir, and `platform/driver/gpio`
+# for the Simplicity SDK root — the last one isn't a guess, it's a
+# path this project's own silicon_labs/gpio/hal_port_silabs_slgpio.c
+# already confirmed real against the SDK source during the wrapper's
+# own development (see that file's header comment).
 # ---------------------------------------------------------------------
 RUN python3 - <<'PYEOF'
-import re
+import subprocess, os
 
-with open('/tmp/install.log') as f:
-    lines = f.readlines()
+INSTALL_ROOT = '/root/.silabs/slt/installs'
+
+def find_first(args):
+    out = subprocess.run(args, capture_output=True, text=True).stdout
+    lines = [l for l in out.splitlines() if l.strip()]
+    return lines[0] if lines else None
+
+gcc_bin = find_first(['find', INSTALL_ROOT, '-maxdepth', '8', '-type', 'f', '-name', 'arm-none-eabi-gcc'])
+slc_bin = find_first(['find', INSTALL_ROOT, '-maxdepth', '8', '-type', 'f', '-name', 'slc'])
+gpio_dir = find_first(['find', INSTALL_ROOT, '-maxdepth', '10', '-type', 'd', '-path', '*/platform/driver/gpio'])
 
 paths = {}
-current_id = None
-for line in lines:
-    m = re.match(r'\s*Id:\s*(\S+)', line)
-    if m:
-        current_id = m.group(1)
-        continue
-    m = re.match(r'\s*Path:\s*(\S+)', line)
-    if m and current_id:
-        paths[current_id] = m.group(1)
-        current_id = None
+if gcc_bin:
+    gcc_bin_dir = os.path.dirname(gcc_bin)
+    paths['GCC_BIN_DIR'] = gcc_bin_dir
+    paths['GCC_ARM_NONE_EABI_PATH'] = os.path.dirname(gcc_bin_dir)
+if slc_bin:
+    paths['SLC_BIN_DIR'] = os.path.dirname(slc_bin)
+if gpio_dir:
+    sdk_root = gpio_dir
+    for _ in range(3):
+        sdk_root = os.path.dirname(sdk_root)
+    paths['SIMPLICITY_SDK_PATH'] = sdk_root
 
 with open('/opt/slt/paths.env', 'w') as f:
-    for ident, path in paths.items():
-        var = ident.upper().replace('-', '_')
-        f.write(f'export {var}_PATH="{path}"\n')
-    f.write('export PATH="${SLC_CLI_PATH:-}/bin:${GCC_ARM_NONE_EABI_PATH:-}/bin:$PATH"\n')
+    for k, v in paths.items():
+        f.write(f'export {k}="{v}"\n')
+    f.write('export PATH="${SLC_BIN_DIR:-}:${GCC_BIN_DIR:-}:$PATH"\n')
 
-print('--- parsed package paths ---')
+print('--- discovered paths ---')
 print(paths)
-print('--- /opt/slt/paths.env ---')
 with open('/opt/slt/paths.env') as f:
     print(f.read())
+if not (gcc_bin and slc_bin and gpio_dir):
+    raise SystemExit(
+        f'one or more markers not found: gcc_bin={gcc_bin!r} slc_bin={slc_bin!r} gpio_dir={gpio_dir!r}'
+    )
 PYEOF
 
 RUN . /opt/slt/paths.env && slc configuration \

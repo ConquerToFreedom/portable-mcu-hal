@@ -175,3 +175,44 @@ hit an unrelated Docker Hub rate limit (`429 Too Many Requests` on the
 `ubuntu:24.04` pull) this round, so this iteration's confidence comes
 from the isolated unit tests above, not a local full-file build. The
 next CI run is still the real check.
+
+## Entry 5 — the real root cause: `slt`'s summary only prints to a TTY
+
+[Run 4](https://github.com/hardfault-in/portable-mcu-hal/actions/runs/39341402100) —
+`slt install` succeeded completely again, but `/tmp/install.log` (the
+file Entry 4's fix redirected its plain-text output to) turned out
+**empty of package data** — the parser's own debug print showed
+`{}`. So the "Installed Packages:" Id/Version/Path summary genuinely
+seen twice before in BuildKit's captured RUN output (runs 2 and 3)
+isn't ordinary stdout content — `slt` only emits that pretty summary
+when it detects a TTY, and silently skips it once stdout is a pipe or
+a redirected file (this build's `> /tmp/install.log`). Two guesses in
+a row (`--json`, then redirecting plain text) both failed for the same
+underlying reason: neither one preserves what only prints to a real
+terminal.
+
+**Fix, this time not dependent on slt's output format at all:**
+dropped the install-log parsing entirely. Instead, search the
+filesystem SLT actually wrote to for concrete marker files/dirs —
+`bin/arm-none-eabi-gcc` for the toolchain, an `slc` executable for
+slc-cli, and `platform/driver/gpio` for the Simplicity SDK root. That
+last marker isn't a fresh guess: it's the exact path
+`silicon_labs/gpio/hal_port_silabs_slgpio.c`'s own header comment
+already cites as confirmed real against the SDK source, from this
+project's original wrapper-development research — reusing a fact this
+repo already established, rather than inventing a new one. Also
+reverted the install step back to plain (non-redirected) `slt install`
+now that nothing downstream needs to parse its output, so the readable
+summary shows up in the build log again for human debugging.
+
+Tested the new path-discovery logic locally against a mocked directory
+tree matching the exact real hashed paths seen in earlier runs'
+logs — `dirname()`-chain math confirmed correct via assertions — before
+editing the real Dockerfile. Also updated `docker/efr32/
+build_in_container.sh` to source the resulting `/opt/slt/paths.env`
+and use the real `$SIMPLICITY_SDK_PATH` instead of its old static
+`/opt/slt/simplicity-sdk` guess.
+
+**Next entry will be:** whether this run's `slc configuration` step
+succeeds, and if so, the first real signal on `slc generate` against
+the guessed `blink_baremetal` example path.

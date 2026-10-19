@@ -19,6 +19,12 @@ set -euo pipefail
 : "${BOARD:?}"
 : "${TEST_NAME:?}"
 
+# The Simplicity SDK / slc-cli / gcc-arm-none-eabi paths SLT actually
+# installed to (hashed Conan paths, not predictable) — discovered and
+# written by docker/efr32/Dockerfile's own build-time step; see that
+# file for how and why.
+. /opt/slt/paths.env
+
 WORK=/work/project
 rm -rf "$WORK"
 mkdir -p "$WORK"
@@ -26,12 +32,13 @@ mkdir -p "$WORK"
 # EDIT-ME: real example project path not independently confirmed from
 # inside this sandbox (silabs.com blocked — see Dockerfile). Silicon
 # Labs' own documented Makefile-workflow example uses
-# "$SISDK/app/common/example/blink_baremetal" for a different board;
+# "<sdk>/app/common/example/blink_baremetal" for a different board;
 # this is the starting guess for BRD2601B's current-SDK (sl_gpio)
-# equivalent. Run `find $SISDK/app -iname '*.slcp' | grep -i led` (or
-# similar) in the container and fix this path if it's wrong — that is
-# expected on the first real run, not a sign anything upstream broke.
-EXAMPLE_SLCP="${SISDK:-/opt/slt/simplicity-sdk}/app/common/example/blink_baremetal/blink_baremetal.slcp"
+# equivalent. Run `find "$SIMPLICITY_SDK_PATH/app" -iname '*.slcp' |
+# grep -i led` (or similar) in the container and fix this path if it's
+# wrong — that is expected on the first real run, not a sign anything
+# upstream broke.
+EXAMPLE_SLCP="${SIMPLICITY_SDK_PATH}/app/common/example/blink_baremetal/blink_baremetal.slcp"
 
 echo "== slc generate: board=$BOARD example=$EXAMPLE_SLCP =="
 slc generate "$EXAMPLE_SLCP" \
