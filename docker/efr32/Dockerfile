@@ -57,11 +57,16 @@ RUN mkdir -p ${SLT_HOME} && cd ${SLT_HOME} \
 # this project's research turned up (a `[dependency]` table with
 # `pkg = "version-or-range"` entries); the exact version-PIN syntax
 # (bare version string vs. a range operator) is NOT independently
-# confirmed. EDIT-ME: non-interactive EULA/license acceptance for
-# `slt install` is not documented anywhere this research reached —
-# the --accept-licenses flag below is a guess by analogy with similar
-# vendor tools (Qt, Android sdkmanager), not a confirmed slt flag. If
-# CI hangs or fails on a license prompt, this is the line to fix.
+# confirmed.
+#
+# CONFIRMED (first real CI run, 2026-10-19): `slt install --help`'s
+# real flags are --check-updates/-e/-f/--force/--no-lock/-s plus the
+# GLOBAL flags --json/--non-interactive/--token-file/--version — there
+# is no --accept-licenses or --yes. Using --non-interactive instead.
+# Still unconfirmed: whether --non-interactive alone is enough to get
+# past any license/EULA prompt non-interactively, or whether it needs
+# --token-file/an OAuth token (the flag's own description mentions
+# $SLT_SECURE_TOKEN) — that's what the NEXT CI run will show.
 # ---------------------------------------------------------------------
 RUN cat > /tmp/recipe.toml <<EOF
 [dependency]
@@ -72,7 +77,7 @@ cmake = "~"
 ninja = "~"
 commander = "~"
 EOF
-RUN slt install -f /tmp/recipe.toml --accept-licenses --yes
+RUN slt install -f /tmp/recipe.toml --non-interactive
 
 # ---------------------------------------------------------------------
 # 3. One-time slc-cli configuration: point it at the installed SDK and

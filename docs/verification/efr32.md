@@ -60,5 +60,36 @@ unconfirmed specific in the files above is marked `EDIT-ME` with the
 exact command to run or check once real SDK/slc-cli access exists, so
 the next iteration is a short, targeted fix, not a redesign.
 
-**Next entry will be:** the first real `docker build`/CI log, and
-whatever `EDIT-ME` it resolves or new issue it surfaces.
+## Entry 2 — first real CI run: SLT-CLI itself works; `slt install` flag was wrong
+
+[Run 1](https://github.com/hardfault-in/portable-mcu-hal/actions/runs/39339865558) —
+**confirmed working**: the guessed SLT-CLI download URL/version
+(`slt-cli-1.2.2-linux-x64.zip`) was right — `slt --version` printed
+`SLT version: 1.2.2-107` inside the container, meaning this sandbox's
+silabs.com block really was the only thing stopping that step locally.
+
+**Failed at:** `slt install -f /tmp/recipe.toml --accept-licenses --yes`
+
+```
+Error: unknown flag: --accept-licenses
+...
+Global Flags:
+      --json                If specified - output will be in JSON format
+      --non-interactive     no user interaction, false by default
+      --token-file string   path to a file containing an OAuth refresh
+                             token; ... Overrides $SLT_SECURE_TOKEN
+      --version             print version info
+```
+
+**Fix:** dropped the guessed `--accept-licenses --yes`, use the real
+global flag `--non-interactive` instead.
+
+**Still open:** whether `--non-interactive` alone gets past any
+license/download prompt, or whether `slt install` additionally needs
+an OAuth token (`--token-file`/`$SLT_SECURE_TOKEN`) to actually pull
+`simplicity-sdk` — unconfirmed until the next run. If it turns out a
+token is required, that's an account/credential the maintainer needs
+to provide — not something to work around silently.
+
+**Next entry will be:** the next CI run's result for the `slt install`
+step specifically.
