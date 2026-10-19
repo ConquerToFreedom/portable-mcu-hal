@@ -6,3 +6,8 @@ build/
 .vscode/
 .idea/
 *.ioc.bak
+
+# hardware verification pipeline: downloaded artifacts / local SDK
+# installs, never committed (see CLAUDE.md / docs/verification/)
+out/
+*.hex

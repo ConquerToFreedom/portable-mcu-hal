@@ -1,0 +1,41 @@
+# Per-vendor configuration for the hardware verification pipeline.
+# Each entry describes everything scripts/build.sh, the CI workflow,
+# and (once HF·NODE details exist) scripts/verify.sh need to build and
+# run one vendor's test firmware. Adding a new vendor is meant to be:
+# add a Dockerfile under docker/<vendor>/, add test folders under
+# tests/<vendor>/, add one entry here — no script changes.
+#
+# EDIT ME: this is a hand-authored starting point, not yet validated
+# against a real build. The first real CI run is expected to surface
+# fixes needed here (image tag, exact tool paths, etc.) — see
+# docs/verification/efr32.md once Phase 1/2 evidence exists.
+
+targets:
+  efr32:
+    enabled: true
+    board: BRD2601B
+    part: EFR32MG24B310F1536IM48
+    # Silicon Labs' current-generation sl_gpio/sl_i2c driver, confirmed
+    # with the user — NOT classic emlib (TARGET_SILABS). Must match the
+    # -DTARGET_* passed to the compiler in docker/efr32/Dockerfile and
+    # tests/efr32/*/Makefile.
+    target_macro: TARGET_SILABS_SLGPIO
+    sdk: simplicity-sdk
+    # Pinned deliberately (hard rule: never changed silently). Latest
+    # patch of the current June-2026 LTS baseline at the time this was
+    # written — confirmed with the user, not a default.
+    sdk_version: "2026.6.1"
+    docker_image: portable-mcu-hal/efr32-verify
+    dockerfile: docker/efr32/Dockerfile
+    # HF·NODE target id for this physical board — not yet supplied;
+    # required before scripts/hfnode.sh / verify.sh can run (Phase 3).
+    hfnode_target_id: null
+    tests:
+      - name: smoke
+        dir: tests/efr32/smoke
+        description: >
+          Boots, toggles the board LED a few times through the
+          wrapper's hf_gpio_* API, prints structured log lines, exits.
+          golden: not yet captured (Phase 3 — needs a real device run
+          through HF·NODE, approved by the user, before
+          tests/efr32/golden/smoke.log can be written).
